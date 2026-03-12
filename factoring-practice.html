@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Factoring Practice MVP</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-2: #1d4ed8;
+      --success: #166534;
+      --success-bg: #dcfce7;
+      --error: #991b1b;
+      --error-bg: #fee2e2;
+      --border: #d1d5db;
+      --shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 18px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: clamp(1.5rem, 3vw, 2.2rem);
+    }
+
+    .subtle {
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
+
+    .field label {
+      display: block;
+      font-size: 0.92rem;
+      margin-bottom: 6px;
+      color: var(--muted);
+    }
+
+    select, button {
+      font: inherit;
+    }
+
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: white;
+    }
+
+    .button-row,
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 10px 14px;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      transition: transform 0.12s ease, background 0.12s ease, opacity 0.12s ease;
+    }
+
+    button:hover { background: var(--accent-2); }
+    button:active { transform: translateY(1px); }
+    button.secondary { background: #e5e7eb; color: var(--text); }
+    button.secondary:hover { background: #d1d5db; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .problem-box {
+      display: grid;
+      gap: 12px;
+    }
+
+    .math-display {
+      min-height: 62px;
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: clamp(1.3rem, 4vw, 2rem);
+      background: #fafafa;
+    }
+
+    .input-display {
+      min-height: 56px;
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 1.2rem;
+      background: white;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      word-break: break-word;
+    }
+
+    .input-display.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+    }
+
+    .input-display.placeholder {
+      color: #9ca3af;
+    }
+
+    .guided-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .guided-step {
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .guided-step.correct {
+      border-color: #86efac;
+      background: #f0fdf4;
+    }
+
+    .guided-step.incorrect {
+      border-color: #fca5a5;
+      background: #fef2f2;
+    }
+
+    .step-label {
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+
+    .feedback {
+      border-radius: 14px;
+      padding: 12px 14px;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+    }
+
+    .feedback.info { background: #eff6ff; color: #1d4ed8; }
+    .feedback.success { background: var(--success-bg); color: var(--success); }
+    .feedback.error { background: var(--error-bg); color: var(--error); }
+
+    .keypad {
+      display: grid;
+      gap: 10px;
+    }
+
+    .keypad-status {
+      color: var(--muted);
+      font-size: 0.92rem;
+      min-height: 22px;
+    }
+
+    .keypad-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .keypad button {
+      min-height: 54px;
+      font-size: 1.05rem;
+    }
+
+    .keypad button.key-special {
+      background: #0f766e;
+    }
+
+    .keypad button.key-special:hover {
+      background: #115e59;
+    }
+
+    .keypad button.key-exp.active {
+      background: #7c3aed;
+    }
+
+    .steps-output {
+      display: grid;
+      gap: 10px;
+    }
+
+    .solution-step {
+      border-left: 4px solid var(--accent);
+      padding: 10px 12px;
+      background: #f8fafc;
+      border-radius: 12px;
+    }
+
+    .solution-step strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    @media (max-width: 640px) {
+      .app { padding: 12px; }
+      .card { padding: 14px; }
+      .keypad-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="card">
+      <h1>Factoring Practice MVP</h1>
+      <p class="subtle">Phase 1: GCF only, with final-answer mode, guided mode, saved solution steps, and a mobile-friendly math keypad.</p>
+    </section>
+
+    <section class="card controls">
+      <div class="field">
+        <label for="methodSelect">Method</label>
+        <select id="methodSelect">
+          <option value="gcf">GCF</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="difficultySelect">Difficulty</label>
+        <select id="difficultySelect">
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="modeSelect">Mode</label>
+        <select id="modeSelect">
+          <option value="final">Final answer</option>
+          <option value="guided">Guided steps</option>
+        </select>
+      </div>
+
+      <div class="button-row">
+        <button id="generateBtn">Generate Problem</button>
+      </div>
+    </section>
+
+    <section class="card problem-box">
+      <div>
+        <p class="subtle">Factor this polynomial:</p>
+        <div id="problemDisplay" class="math-display">Press <strong style="margin-left:6px;">Generate Problem</strong></div>
+      </div>
+
+      <div id="workArea"></div>
+
+      <div class="action-row">
+        <button id="checkBtn">Check</button>
+        <button id="hintBtn" class="secondary">Hint</button>
+        <button id="solveStepBtn" class="secondary">Solve Step</button>
+        <button id="showSolutionBtn" class="secondary">Show Solution</button>
+      </div>
+
+      <div id="feedbackBox" class="feedback info">Generate a problem to start.</div>
+    </section>
+
+    <section class="card keypad">
+      <div class="keypad-status" id="keypadStatus">Tap an answer field, then use the keypad.</div>
+      <div class="keypad-grid" id="keypadGrid"></div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin-top: 0;">Solution Steps</h2>
+      <div id="stepsOutput" class="steps-output">
+        <p class="subtle">The saved factoring steps will appear here when requested.</p>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      settings: {
+        method: 'gcf',
+        difficulty: 'easy',
+        mode: 'final'
+      },
+      currentProblem: null,
+      activeInputId: null,
+      inputValues: {},
+      exponentMode: false,
+      feedback: {
+        message: 'Generate a problem to start.',
+        type: 'info'
+      },
+      revealedSteps: 0,
+      stepStatuses: {}
+    };
+
+    const superscriptMap = {
+      '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+      '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'
+    };
+
+    const elements = {
+      methodSelect: document.getElementById('methodSelect'),
+      difficultySelect: document.getElementById('difficultySelect'),
+      modeSelect: document.getElementById('modeSelect'),
+      generateBtn: document.getElementById('generateBtn'),
+      problemDisplay: document.getElementById('problemDisplay'),
+      workArea: document.getElementById('workArea'),
+      checkBtn: document.getElementById('checkBtn'),
+      hintBtn: document.getElementById('hintBtn'),
+      solveStepBtn: document.getElementById('solveStepBtn'),
+      showSolutionBtn: document.getElementById('showSolutionBtn'),
+      feedbackBox: document.getElementById('feedbackBox'),
+      keypadStatus: document.getElementById('keypadStatus'),
+      keypadGrid: document.getElementById('keypadGrid'),
+      stepsOutput: document.getElementById('stepsOutput')
+    };
+
+    const keypadButtons = [
+      { label: '7', value: '7' },
+      { label: '8', value: '8' },
+      { label: '9', value: '9' },
+      { label: '⌫', value: 'backspace', className: 'key-special' },
+      { label: '4', value: '4' },
+      { label: '5', value: '5' },
+      { label: '6', value: '6' },
+      { label: 'Clear', value: 'clear', className: 'key-special' },
+      { label: '1', value: '1' },
+      { label: '2', value: '2' },
+      { label: '3', value: '3' },
+      { label: 'exp', value: 'exp', className: 'key-special key-exp' },
+      { label: '0', value: '0' },
+      { label: 'x', value: 'x' },
+      { label: '+', value: '+' },
+      { label: '−', value: '-' },
+      { label: '(', value: '(' },
+      { label: ')', value: ')' }
+    ];
+
+    function randInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function choice(arr) {
+      return arr[randInt(0, arr.length - 1)];
+    }
+
+    function gcdTwo(a, b) {
+      a = Math.abs(a);
+      b = Math.abs(b);
+      while (b !== 0) {
+        const temp = b;
+        b = a % b;
+        a = temp;
+      }
+      return a || 1;
+    }
+
+    function gcdList(values) {
+      return values.reduce((acc, value) => gcdTwo(acc, value));
+    }
+
+    function formatFactorPiece(coefficient, exponent) {
+      if (exponent === 0) return String(coefficient);
+      if (coefficient === 1) return exponent === 1 ? 'x' : `x^${exponent}`;
+      return exponent === 1 ? `${coefficient}x` : `${coefficient}x^${exponent}`;
+    }
+
+    function formatInsideTerm(coefficient, exponent, isFirst) {
+      const sign = coefficient >= 0 ? (isFirst ? '' : ' + ') : (isFirst ? '-' : ' - ');
+      const absCoeff = Math.abs(coefficient);
+
+      if (exponent === 0) return `${sign}${absCoeff}`;
+      const coeffPart = absCoeff === 1 ? '' : String(absCoeff);
+      const varPart = exponent === 1 ? 'x' : `x^${exponent}`;
+      return `${sign}${coeffPart}${varPart}`;
+    }
+
+    function formatPolynomial(terms) {
+      return terms
+        .map((term, index) => formatInsideTerm(term.coefficient, term.exponent, index === 0))
+        .join('');
+    }
+
+    function rawToPretty(raw) {
+      return raw
+        .replace(/\^([0-9])/g, (_, digit) => superscriptMap[digit] || `^${digit}`)
+        .replace(/-/g, '−');
+    }
+
+    function normalizeRaw(raw) {
+      return raw
+        .replace(/\s+/g, '')
+        .replace(/−/g, '-')
+        .replace(/\u2062/g, '')
+        .replace(/([0-9)])([a-zA-Z(])/g, '$1*$2')
+        .replace(/([a-zA-Z])\(/g, '$1*(')
+        .replace(/\)([0-9a-zA-Z])/g, ')*$1');
+    }
+
+    function renderMath(raw) {
+      return rawToPretty(raw);
+    }
+
+    function isLikelyIrreducibleQuadratic(a, b, c) {
+      const disc = b * b - 4 * a * c;
+      if (disc < 0) return true;
+      const root = Math.sqrt(disc);
+      return !Number.isInteger(root);
+    }
+
+    function generateGCFProblem(difficulty) {
+      let terms;
+      let numericGCF;
+      let variableGCFExponent;
+
+      if (difficulty === 'easy') {
+        numericGCF = choice([2, 3, 4, 5, 6, 7, 8, 9]);
+        variableGCFExponent = 0;
+
+        const insideTerms = [
+          { coefficient: randInt(2, 9) * choice([1, -1]), exponent: choice([1, 2]) },
+          { coefficient: randInt(2, 9) * choice([1, -1]), exponent: 0 }
+        ];
+
+        if (insideTerms[0].coefficient < 0) insideTerms[0].coefficient *= -1;
+        terms = insideTerms.map(term => ({
+          coefficient: numericGCF * term.coefficient,
+          exponent: term.exponent
+        }));
+      } else if (difficulty === 'medium') {
+        numericGCF = choice([2, 3, 4, 5, 6, 8, 9, 10, 12]);
+        variableGCFExponent = choice([1, 2]);
+
+        let a, b, c;
+        do {
+          a = randInt(1, 4);
+          b = randInt(-6, 6);
+          c = randInt(-6, 6);
+        } while (b === 0 || c === 0 || !isLikelyIrreducibleQuadratic(a, b, c));
+
+        const insideTerms = [
+          { coefficient: a, exponent: 2 },
+          { coefficient: b, exponent: 1 },
+          { coefficient: c, exponent: 0 }
+        ];
+
+        terms = insideTerms.map(term => ({
+          coefficient: numericGCF * term.coefficient,
+          exponent: term.exponent + variableGCFExponent
+        }));
+      } else {
+        numericGCF = choice([2, 3, 4, 5, 6, 8, 9, 10, 12]);
+        variableGCFExponent = choice([1, 2, 3]);
+
+        let a, b, c;
+        do {
+          a = randInt(1, 5);
+          b = randInt(-8, 8);
+          c = randInt(-8, 8);
+        } while (b === 0 || c === 0 || !isLikelyIrreducibleQuadratic(a, b, c));
+
+        const insideTerms = [
+          { coefficient: a, exponent: choice([2, 3]) },
+          { coefficient: b, exponent: 1 },
+          { coefficient: c, exponent: 0 }
+        ].sort((left, right) => right.exponent - left.exponent);
+
+        terms = insideTerms.map(term => ({
+          coefficient: numericGCF * term.coefficient,
+          exponent: term.exponent + variableGCFExponent
+        }));
+      }
+
+      terms.sort((left, right) => right.exponent - left.exponent);
+
+      const expression = formatPolynomial(terms);
+      const insideTerms = terms.map(term => ({
+        coefficient: term.coefficient / numericGCF,
+        exponent: term.exponent - variableGCFExponent
+      }));
+      const insideExpression = formatPolynomial(insideTerms);
+
+      const totalGCF = variableGCFExponent === 0
+        ? String(numericGCF)
+        : formatFactorPiece(numericGCF, variableGCFExponent);
+
+      const answer = `${totalGCF}(${insideExpression})`;
+
+      const steps = [
+        {
+          expression,
+          rule: 'gcf',
+          output: answer,
+          explanation: `The numeric GCF is ${numericGCF}, the variable GCF is ${variableGCFExponent === 0 ? '1' : variableGCFExponent === 1 ? 'x' : `x^${variableGCFExponent}`}, so the total GCF is ${totalGCF}.`
+        }
+      ];
+
+      const workflow = [
+        {
+          id: 'numeric-gcf',
+          label: 'Find the numeric GCF',
+          expected: String(numericGCF)
+        },
+        {
+          id: 'variable-gcf',
+          label: 'Find the variable GCF',
+          expected: variableGCFExponent === 0 ? '1' : (variableGCFExponent === 1 ? 'x' : `x^${variableGCFExponent}`)
+        },
+        {
+          id: 'total-gcf',
+          label: 'Multiply both to get the total GCF',
+          expected: totalGCF
+        },
+        {
+          id: 'inside',
+          label: 'Write the expression left inside the parentheses',
+          expected: insideExpression
+        },
+        {
+          id: 'final',
+          label: 'Write the factored form',
+          expected: answer
+        }
+      ];
+
+      return {
+        id: `gcf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        method: 'gcf',
+        difficulty,
+        expression,
+        factors: [totalGCF, insideExpression],
+        answer,
+        steps,
+        workflow
+      };
+    }
+
+    function generateProblem() {
+      const method = state.settings.method;
+      const difficulty = state.settings.difficulty;
+
+      if (method === 'gcf') {
+        state.currentProblem = generateGCFProblem(difficulty);
+      }
+
+      state.inputValues = {};
+      state.activeInputId = null;
+      state.exponentMode = false;
+      state.revealedSteps = 0;
+      state.stepStatuses = {};
+      setFeedback('New problem generated.', 'info');
+      render();
+    }
+
+    function setFeedback(message, type = 'info') {
+      state.feedback = { message, type };
+      renderFeedback();
+    }
+
+    function renderFeedback() {
+      elements.feedbackBox.className = `feedback ${state.feedback.type}`;
+      elements.feedbackBox.textContent = state.feedback.message;
+    }
+
+    function ensureInputRecord(id) {
+      if (!state.inputValues[id]) {
+        state.inputValues[id] = { raw: '', display: '' };
+      }
+    }
+
+    function syncDisplay(id) {
+      ensureInputRecord(id);
+      state.inputValues[id].display = rawToPretty(state.inputValues[id].raw);
+    }
+
+    function selectInput(id) {
+      state.activeInputId = id;
+      renderWorkArea();
+      renderKeypadStatus();
+    }
+
+    function canUseExponentAfter(raw) {
+      return /x$/.test(raw);
+    }
+
+    function insertIntoActiveInput(value) {
+      if (!state.activeInputId) {
+        setFeedback('Tap an answer field first.', 'error');
+        return;
+      }
+
+      ensureInputRecord(state.activeInputId);
+      const record = state.inputValues[state.activeInputId];
+
+      if (value === 'clear') {
+        record.raw = '';
+        state.exponentMode = false;
+        syncDisplay(state.activeInputId);
+        render();
+        return;
+      }
+
+      if (value === 'backspace') {
+        if (/\^[0-9]$/.test(record.raw)) {
+          record.raw = record.raw.slice(0, -2);
+        } else {
+          record.raw = record.raw.slice(0, -1);
+        }
+        state.exponentMode = false;
+        syncDisplay(state.activeInputId);
+        render();
+        return;
+      }
+
+      if (value === 'exp') {
+        if (!canUseExponentAfter(record.raw)) {
+          setFeedback('Exponent can only be added right after a variable.', 'error');
+          return;
+        }
+        state.exponentMode = !state.exponentMode;
+        renderKeypad();
+        renderKeypadStatus();
+        return;
+      }
+
+      if (state.exponentMode) {
+        if (!/^[0-9]$/.test(value)) return;
+        record.raw += `^${value}`;
+        state.exponentMode = false;
+        syncDisplay(state.activeInputId);
+        render();
+        return;
+      }
+
+      record.raw += value;
+      syncDisplay(state.activeInputId);
+      render();
+    }
+
+    function compareAnswers(studentRaw, expectedRaw) {
+      return normalizeRaw(studentRaw) === normalizeRaw(expectedRaw);
+    }
+
+    function checkFinalAnswer() {
+      const record = state.inputValues['final-answer'];
+      if (!record || !record.raw.trim()) {
+        setFeedback('Enter an answer first.', 'error');
+        return;
+      }
+
+      const correct = compareAnswers(record.raw, state.currentProblem.answer);
+      setFeedback(correct ? 'Correct!' : 'Not quite. Try again or use Hint / Solve Step.', correct ? 'success' : 'error');
+    }
+
+    function checkGuidedAnswers() {
+      const problem = state.currentProblem;
+      let allCorrect = true;
+
+      for (const step of problem.workflow) {
+        const record = state.inputValues[step.id];
+        const raw = record?.raw || '';
+        const correct = raw.trim() !== '' && compareAnswers(raw, step.expected);
+        state.stepStatuses[step.id] = raw.trim() === '' ? 'empty' : (correct ? 'correct' : 'incorrect');
+        if (!correct) allCorrect = false;
+      }
+
+      renderWorkArea();
+      setFeedback(allCorrect ? 'Excellent. Every guided step is correct.' : 'Some steps are still incorrect or blank.', allCorrect ? 'success' : 'error');
+    }
+
+    function checkAnswers() {
+      if (!state.currentProblem) {
+        setFeedback('Generate a problem first.', 'error');
+        return;
+      }
+
+      if (state.settings.mode === 'final') {
+        checkFinalAnswer();
+      } else {
+        checkGuidedAnswers();
+      }
+    }
+
+    function renderWorkArea() {
+      const container = elements.workArea;
+      container.innerHTML = '';
+
+      if (!state.currentProblem) return;
+
+      if (state.settings.mode === 'final') {
+        ensureInputRecord('final-answer');
+        const record = state.inputValues['final-answer'];
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = '<p class="subtle">Enter the full factored form:</p>';
+
+        const display = document.createElement('div');
+        const classes = ['input-display'];
+        if (state.activeInputId === 'final-answer') classes.push('active');
+        if (!record.display) classes.push('placeholder');
+        display.className = classes.join(' ');
+        display.textContent = record.display || 'Tap here to type your answer';
+        display.addEventListener('click', () => selectInput('final-answer'));
+
+        wrapper.appendChild(display);
+        container.appendChild(wrapper);
+        return;
+      }
+
+      const list = document.createElement('div');
+      list.className = 'guided-list';
+
+      state.currentProblem.workflow.forEach(step => {
+        ensureInputRecord(step.id);
+        const record = state.inputValues[step.id];
+        const status = state.stepStatuses[step.id];
+
+        const item = document.createElement('div');
+        item.className = 'guided-step';
+        if (status === 'correct') item.classList.add('correct');
+        if (status === 'incorrect') item.classList.add('incorrect');
+
+        const label = document.createElement('div');
+        label.className = 'step-label';
+        label.textContent = step.label;
+
+        const display = document.createElement('div');
+        const classes = ['input-display'];
+        if (state.activeInputId === step.id) classes.push('active');
+        if (!record.display) classes.push('placeholder');
+        display.className = classes.join(' ');
+        display.textContent = record.display || 'Tap here to type';
+        display.addEventListener('click', () => selectInput(step.id));
+
+        item.appendChild(label);
+        item.appendChild(display);
+        list.appendChild(item);
+      });
+
+      container.appendChild(list);
+    }
+
+    function renderProblem() {
+      if (!state.currentProblem) {
+        elements.problemDisplay.innerHTML = 'Press <strong style="margin-left:6px;">Generate Problem</strong>';
+        return;
+      }
+      elements.problemDisplay.textContent = renderMath(state.currentProblem.expression);
+    }
+
+    function renderKeypadStatus() {
+      if (!state.activeInputId) {
+        elements.keypadStatus.textContent = 'Tap an answer field, then use the keypad.';
+        return;
+      }
+      elements.keypadStatus.textContent = state.exponentMode
+        ? 'Exponent mode is on: tap one digit to add an exponent.'
+        : `Typing into: ${state.activeInputId}`;
+    }
+
+    function renderKeypad() {
+      elements.keypadGrid.innerHTML = '';
+
+      keypadButtons.forEach(buttonInfo => {
+        const button = document.createElement('button');
+        button.textContent = buttonInfo.label;
+        button.type = 'button';
+        if (buttonInfo.className) button.className = buttonInfo.className;
+        if (buttonInfo.value === 'exp' && state.exponentMode) button.classList.add('active');
+
+        const isDigit = /^[0-9]$/.test(buttonInfo.value);
+        const allowedInExponentMode = isDigit || buttonInfo.value === 'backspace' || buttonInfo.value === 'clear';
+        if (state.exponentMode && !allowedInExponentMode) button.disabled = true;
+
+        button.addEventListener('click', () => insertIntoActiveInput(buttonInfo.value));
+        elements.keypadGrid.appendChild(button);
+      });
+    }
+
+    function renderStepsOutput(showAll = false) {
+      const container = elements.stepsOutput;
+      container.innerHTML = '';
+
+      if (!state.currentProblem) {
+        container.innerHTML = '<p class="subtle">The saved factoring steps will appear here when requested.</p>';
+        return;
+      }
+
+      const stepsToShow = showAll ? state.currentProblem.steps.length : state.revealedSteps;
+      if (stepsToShow === 0) {
+        container.innerHTML = '<p class="subtle">No steps revealed yet.</p>';
+        return;
+      }
+
+      state.currentProblem.steps.slice(0, stepsToShow).forEach((step, index) => {
+        const div = document.createElement('div');
+        div.className = 'solution-step';
+        div.innerHTML = `
+          <strong>Step ${index + 1}: ${step.rule.replaceAll('_', ' ')}</strong>
+          <div>${renderMath(step.expression)} → ${renderMath(step.output)}</div>
+          <div style="margin-top:6px; color: var(--muted);">${renderMath(step.explanation)}</div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function showHint() {
+      if (!state.currentProblem) {
+        setFeedback('Generate a problem first.', 'error');
+        return;
+      }
+
+      const problem = state.currentProblem;
+      const first = problem.workflow[0];
+      setFeedback(`Hint: ${first.label}.`, 'info');
+    }
+
+    function solveNextStep() {
+      if (!state.currentProblem) {
+        setFeedback('Generate a problem first.', 'error');
+        return;
+      }
+
+      if (state.settings.mode === 'final') {
+        state.revealedSteps = Math.min(state.revealedSteps + 1, state.currentProblem.steps.length);
+        renderStepsOutput();
+        setFeedback('Revealed one saved factoring step.', 'info');
+        return;
+      }
+
+      const nextStep = state.currentProblem.workflow.find(step => {
+        const record = state.inputValues[step.id];
+        return !record || !record.raw;
+      });
+
+      if (!nextStep) {
+        setFeedback('All guided fields are already filled.', 'info');
+        return;
+      }
+
+      state.inputValues[nextStep.id] = {
+        raw: nextStep.expected,
+        display: rawToPretty(nextStep.expected)
+      };
+      state.stepStatuses[nextStep.id] = 'correct';
+      renderWorkArea();
+      setFeedback(`Filled: ${nextStep.label}.`, 'info');
+    }
+
+    function showFullSolution() {
+      if (!state.currentProblem) {
+        setFeedback('Generate a problem first.', 'error');
+        return;
+      }
+
+      state.currentProblem.workflow.forEach(step => {
+        state.inputValues[step.id] = {
+          raw: step.expected,
+          display: rawToPretty(step.expected)
+        };
+        state.stepStatuses[step.id] = 'correct';
+      });
+
+      if (state.settings.mode === 'final') {
+        state.inputValues['final-answer'] = {
+          raw: state.currentProblem.answer,
+          display: rawToPretty(state.currentProblem.answer)
+        };
+      }
+
+      state.revealedSteps = state.currentProblem.steps.length;
+      render();
+      setFeedback('Full solution revealed.', 'info');
+    }
+
+    function render() {
+      renderProblem();
+      renderWorkArea();
+      renderFeedback();
+      renderKeypad();
+      renderKeypadStatus();
+      renderStepsOutput();
+    }
+
+    elements.methodSelect.addEventListener('change', event => {
+      state.settings.method = event.target.value;
+    });
+
+    elements.difficultySelect.addEventListener('change', event => {
+      state.settings.difficulty = event.target.value;
+    });
+
+    elements.modeSelect.addEventListener('change', event => {
+      state.settings.mode = event.target.value;
+      state.activeInputId = null;
+      state.exponentMode = false;
+      render();
+    });
+
+    elements.generateBtn.addEventListener('click', generateProblem);
+    elements.checkBtn.addEventListener('click', checkAnswers);
+    elements.hintBtn.addEventListener('click', showHint);
+    elements.solveStepBtn.addEventListener('click', solveNextStep);
+    elements.showSolutionBtn.addEventListener('click', showFullSolution);
+
+    render();
+  </script>
+</body>
+</html>

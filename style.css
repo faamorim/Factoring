@@ -1,0 +1,325 @@
+:root {
+  --bg: #f6f7fb;
+  --card: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --accent-2: #1d4ed8;
+  --success: #166534;
+  --success-bg: #dcfce7;
+  --error: #991b1b;
+  --error-bg: #fee2e2;
+  --info: #1d4ed8;
+  --info-bg: #eff6ff;
+  --border: #d1d5db;
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+  --radius: 18px;
+  --sticky-top-offset: 10px;
+  --keypad-height: 252px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  padding-bottom: calc(var(--keypad-height) + 18px);
+}
+
+button, select {
+  font: inherit;
+}
+
+.app-shell {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+.hero h1 {
+  margin: 0 0 6px;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+}
+
+.subtle {
+  color: var(--muted);
+  margin: 0;
+}
+
+.controls-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.field label {
+  display: block;
+  font-size: 0.92rem;
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+
+select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: white;
+}
+
+.button-field {
+  display: flex;
+}
+
+button {
+  border: none;
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, opacity 0.12s ease;
+}
+
+button:hover { background: var(--accent-2); }
+button:active { transform: translateY(1px); }
+button.secondary { background: #e5e7eb; color: var(--text); }
+button.secondary:hover { background: #d1d5db; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.sticky-problem-wrap {
+  position: sticky;
+  top: var(--sticky-top-offset);
+  z-index: 20;
+}
+
+.sticky-problem {
+  padding: 12px 14px;
+}
+
+.sticky-label {
+  color: var(--muted);
+  font-size: 0.92rem;
+  margin-bottom: 6px;
+}
+
+.math-display {
+  min-height: 52px;
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: clamp(1.15rem, 3.7vw, 1.75rem);
+  background: #fafafa;
+  word-break: break-word;
+}
+
+.main-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.work-card,
+.steps-card {
+  display: grid;
+  gap: 14px;
+}
+
+.steps-card h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.input-display {
+  min-height: 56px;
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 1.15rem;
+  background: white;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  word-break: break-word;
+}
+
+.input-display.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.input-display.placeholder {
+  color: #9ca3af;
+}
+
+.guided-list {
+  display: grid;
+  gap: 12px;
+}
+
+.guided-step {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.guided-step.correct {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.guided-step.incorrect {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.step-label {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.feedback {
+  border-radius: 14px;
+  padding: 12px 14px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+}
+
+.feedback.info { background: var(--info-bg); color: var(--info); }
+.feedback.success { background: var(--success-bg); color: var(--success); }
+.feedback.error { background: var(--error-bg); color: var(--error); }
+
+.steps-output {
+  display: grid;
+  gap: 10px;
+}
+
+.solution-step {
+  border-left: 4px solid var(--accent);
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.solution-step strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.sticky-keypad-wrap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.sticky-keypad {
+  max-width: 980px;
+  margin: 0 auto;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  pointer-events: auto;
+  padding: 12px;
+}
+
+.keypad-status {
+  color: var(--muted);
+  font-size: 0.92rem;
+  min-height: 22px;
+  margin-bottom: 10px;
+}
+
+.keypad-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.keypad-grid button {
+  min-height: 48px;
+  font-size: 1.02rem;
+}
+
+.keypad-grid button.key-special {
+  background: #0f766e;
+}
+
+.keypad-grid button.key-special:hover {
+  background: #115e59;
+}
+
+.keypad-grid button.key-exp.active {
+  background: #7c3aed;
+}
+
+@media (min-width: 900px) {
+  .main-layout {
+    grid-template-columns: 1.3fr 0.9fr;
+    align-items: start;
+  }
+
+  .steps-card {
+    position: sticky;
+    top: 122px;
+  }
+}
+
+@media (max-width: 760px) {
+  .controls-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --keypad-height: 300px;
+    --sticky-top-offset: 8px;
+  }
+
+  .app-shell {
+    padding: 12px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
+  .action-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .sticky-keypad {
+    padding: 10px;
+  }
+}

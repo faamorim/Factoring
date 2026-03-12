@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Factoring Practice</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero card">
+      <h1>Factoring Practice</h1>
+      <p class="subtle">Phase 1: GCF only, with final-answer mode, guided mode, saved solution steps, and a mobile-friendly math keypad.</p>
+    </header>
+
+    <section class="card controls-card">
+      <div class="controls-grid">
+        <div class="field">
+          <label for="methodSelect">Method</label>
+          <select id="methodSelect">
+            <option value="gcf">GCF</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="difficultySelect">Difficulty</label>
+          <select id="difficultySelect">
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="modeSelect">Mode</label>
+          <select id="modeSelect">
+            <option value="final">Final answer</option>
+            <option value="guided">Guided steps</option>
+          </select>
+        </div>
+
+        <div class="field button-field">
+          <button id="generateBtn">Generate Problem</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="sticky-problem-wrap">
+      <div class="sticky-problem card">
+        <div class="sticky-label">Factor this polynomial:</div>
+        <div id="problemDisplay" class="math-display">Press Generate Problem</div>
+      </div>
+    </section>
+
+    <main class="main-layout">
+      <section class="card work-card">
+        <div id="workArea"></div>
+
+        <div class="action-row">
+          <button id="checkBtn">Check</button>
+          <button id="hintBtn" class="secondary">Hint</button>
+          <button id="solveStepBtn" class="secondary">Solve Step</button>
+          <button id="showSolutionBtn" class="secondary">Show Solution</button>
+        </div>
+
+        <div id="feedbackBox" class="feedback info">Generate a problem to start.</div>
+      </section>
+
+      <section class="card steps-card">
+        <h2>Solution Steps</h2>
+        <div id="stepsOutput" class="steps-output">
+          <p class="subtle">The saved factoring steps will appear here when requested.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <section class="sticky-keypad-wrap">
+    <div class="sticky-keypad card">
+      <div class="keypad-status" id="keypadStatus">Tap an answer field, then use the keypad.</div>
+      <div class="keypad-grid" id="keypadGrid"></div>
+    </div>
+  </section>
+
+  <script src="utils.js"></script>
+  <script src="generators.js"></script>
+  <script src="input.js"></script>
+  <script src="render.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
