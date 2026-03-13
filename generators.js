@@ -10,303 +10,395 @@ window.Generators = (() => {
   } = window.Utils;
 
   // ---------------------------------------------------------------------------
-  // generateGCFLayer(difficulty)
+  // generateGCFLayer({ coeffRange, xExpRange, yExpRange, expression, insideTerms })
   //
-  // Shared primitive — returns ONLY the GCF components appropriate for the
-  // given difficulty: a numeric GCF and a variable GCF exponent.
+  // Shared primitive used by any problem that has a GCF step.
+  // Picks the GCF components from the given ranges, then builds and returns
+  // the complete workflow steps and hints for the GCF portion of a problem.
   //
-  // Deliberately knows nothing about inside terms. The caller is responsible
-  // for generating inside terms that suit its own purpose:
-  //   - generateGCFProblem: inside terms must be irreducible
-  //   - generateFullFactoringProblem (future): inside terms must be factorable
+  // The caller is responsible for:
+  //   - Generating inside terms (no shared numeric, x, or y factor)
+  //   - Building the full polynomial by multiplying inside terms by the GCF
+  //   - Appending the final workflow step (write the factored form)
   //
-  // Returns: { numericGCF, variableGCFExponent }
+  // Parameters:
+  //   coeffRange  [min, max]  range for the numeric GCF
+  //   xExpRange   [min, max]  range for the x GCF exponent (0 = no x in GCF)
+  //   yExpRange   [min, max]  range for the y GCF exponent (default [0,0])
+  //   expression              full polynomial string (for hints)
+  //   insideTerms             inside terms array (for hints and answer)
+  //
+  // Returns:
+  //   numericGCF, xGCFExponent, yGCFExponent  — the GCF components
+  //   totalGCF, variableGCFText               — formatted GCF strings
+  //   insideExpression, answer                — formatted strings
+  //   gcfSteps, gcfWorkflow                   — steps/workflow for GCF portion
   // ---------------------------------------------------------------------------
-  function generateGCFLayer(difficulty) {
-    if (difficulty === 'emerging') {
-      return {
-        numericGCF: choice([2, 3, 4, 5]),
-        variableGCFExponent: 0
-      };
-    }
+  function generateGCFLayer({
+    coeffRange,
+    xExpRange,
+    yExpRange = [0, 0],
+    expression,
+    insideTerms
+  }) {
+    const numericGCF   = randInt(coeffRange[0], coeffRange[1]);
+    const xGCFExponent = randInt(xExpRange[0], xExpRange[1]);
+    const yGCFExponent = randInt(yExpRange[0], yExpRange[1]);
 
-    if (difficulty === 'developing') {
-      return {
-        numericGCF: choice([2, 3, 4, 5, 6]),
-        variableGCFExponent: choice([1, 2])
-      };
-    }
-
-    if (difficulty === 'proficient') {
-      return {
-        numericGCF: choice([2, 3, 4, 5, 6, 8, 9, 10, 12]),
-        variableGCFExponent: choice([0, 1])
-      };
-    }
-
-    // extending
-    return {
-      numericGCF: choice([2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16]),
-      variableGCFExponent: choice([1, 2, 3])
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // generateGCFProblem(difficulty)
-  //
-  // Assembles a full standalone GCF problem:
-  //   1. Gets GCF components from generateGCFLayer
-  //   2. Generates inside terms guaranteed to be irreducible (no further
-  //      factoring possible), appropriate for the difficulty
-  //   3. Builds the full polynomial, answer, steps, workflow, and hints
-  // ---------------------------------------------------------------------------
-  function generateGCFProblem(difficulty) {
-    const { numericGCF, variableGCFExponent } = generateGCFLayer(difficulty);
-
-    // --- Generate inside terms based on difficulty ---
-    let insideTerms;
-
-    if (difficulty === 'emerging') {
-      // Two positive terms, no variable GCF, small coefficients
-      let c1, c2;
-      do {
-        c1 = randInt(2, 6);
-        c2 = randInt(2, 6);
-      } while (gcdList([c1, c2]) !== 1);
-
-      insideTerms = [
-        { coefficient: c1, exponent: choice([1, 2]) },
-        { coefficient: c2, exponent: 0 }
-      ];
-
-    } else if (difficulty === 'developing') {
-      // Two positive terms, variable GCF exponent already 1 from layer
-      let c1, c2;
-      do {
-        c1 = randInt(2, 8);
-        c2 = randInt(2, 8);
-      } while (gcdList([c1, c2]) !== 1);
-
-      insideTerms = [
-        { coefficient: c1, exponent: choice([1, 2]) },
-        { coefficient: c2, exponent: 0 }
-      ];
-
-    } else if (difficulty === 'proficient') {
-      // Three terms, b can be negative, c stays positive
-      let a, b, c;
-      do {
-        a = randInt(1, 4);
-        b = randInt(1, 6) * choice([1, -1]);
-        c = randInt(1, 6);
-      } while (
-        gcdList([Math.abs(a), Math.abs(b), c]) !== 1 ||
-        !isLikelyIrreducibleQuadratic(a, b, c)
-      );
-
-      insideTerms = [
-        { coefficient: a, exponent: 2 },
-        { coefficient: b, exponent: 1 },
-        { coefficient: c, exponent: 0 }
-      ];
-
-    } else {
-      // extending: three terms, full freedom, middle exponent randomized
-      let a, b, c, leadingExponent, middleExponent;
-      do {
-        a = randInt(1, 5);
-        b = randInt(-8, 8);
-        c = randInt(-8, 8);
-        leadingExponent = choice([2, 3, 4]);
-        middleExponent = randInt(1, leadingExponent - 1);
-      } while (
-        b === 0 ||
-        c === 0 ||
-        gcdList([Math.abs(a), Math.abs(b), Math.abs(c)]) !== 1 ||
-        !isLikelyIrreducibleQuadratic(a, b, c)
-      );
-
-      insideTerms = [
-        { coefficient: a, exponent: leadingExponent },
-        { coefficient: b, exponent: middleExponent },
-        { coefficient: c, exponent: 0 }
-      ].sort((left, right) => right.exponent - left.exponent);
-    }
-
-    // --- Build the full polynomial by scaling inside terms by the GCF ---
-    const terms = insideTerms
-      .map((term) => ({
-        coefficient: numericGCF * term.coefficient,
-        exponent: term.exponent + variableGCFExponent
-      }))
-      .sort((left, right) => right.exponent - left.exponent);
-
-    // --- Derived values ---
-    const expression = formatPolynomial(terms);
-    const insideExpression = formatPolynomial(insideTerms);
-
-    const totalGCF = variableGCFExponent === 0
+    const xGCFPart = xGCFExponent === 0 ? '' : xGCFExponent === 1 ? 'x' : `x^${xGCFExponent}`;
+    const yGCFPart = yGCFExponent === 0 ? '' : yGCFExponent === 1 ? 'y' : `y^${yGCFExponent}`;
+    const variableGCFText = (xGCFPart + yGCFPart) || '1';
+    const totalGCF = variableGCFText === '1'
       ? String(numericGCF)
-      : formatFactorPiece(numericGCF, variableGCFExponent);
+      : numericGCF === 1 ? variableGCFText : `${numericGCF}${variableGCFText}`;
 
-    const variableGCFText = variableGCFExponent === 0
-      ? '1'
-      : variableGCFExponent === 1
-        ? 'x'
-        : `x^${variableGCFExponent}`;
-
+    const insideExpression = formatPolynomial(insideTerms);
     const answer = `${totalGCF}(${insideExpression})`;
 
-    // --- Steps ---
-    const steps = [
+    // Reconstruct full terms for hint text
+    const fullTerms = insideTerms.map(t => ({
+      coefficient: numericGCF * t.coefficient,
+      exponent:    t.exponent + xGCFExponent,
+      yExponent:   (t.yExponent || 0) + yGCFExponent
+    }));
+
+    const coefficients = fullTerms.map(t => Math.abs(t.coefficient));
+    const numericHint = `What is the GCF of ${coefficients.join(', ')}?`;
+
+    const xExpList = fullTerms
+      .map(t => t.exponent === 0 ? 'none' : t.exponent === 1 ? 'x' : `x^${t.exponent}`)
+      .join(', ');
+
+    // Mention y whenever y appears anywhere in the polynomial — even if there is no y GCF.
+    // This teaches students to always check for a y factor, not just assume there isn't one.
+    const yAppearsInProblem = fullTerms.some(t => (t.yExponent || 0) > 0);
+    const yExpList = yAppearsInProblem
+      ? ` Y exponents: ${fullTerms.map(t => (t.yExponent || 0) === 0 ? 'none' : (t.yExponent || 0) === 1 ? 'y' : `y^${t.yExponent}`).join(', ')}.`
+      : '';
+    const yGCFNote = yAppearsInProblem && yGCFExponent === 0
+      ? ' There is no shared y factor — the y GCF is 1.'
+      : '';
+
+    const variableHint = variableGCFText === '1' && !yAppearsInProblem
+      ? 'There is no variable factor shared by all terms — the variable GCF is 1.'
+      : `Find the lowest power of each variable shared by every term. X exponents: ${xExpList}.${yExpList}${yGCFNote}`;
+
+    const totalGCFHint = variableGCFText === '1'
+      ? `The numeric GCF is ${numericGCF} and there is no variable GCF. Total GCF = ${numericGCF}.`
+      : `Multiply the numeric GCF (${numericGCF}) by the variable GCF (${variableGCFText}).`;
+
+    const insideHint = `Divide every term of ${expression} by the total GCF (${totalGCF}). What expression is left inside the parentheses?`;
+
+    const gcfWorkflow = [
+      {
+        id: 'numeric-gcf',
+        label: 'Find the numeric GCF',
+        hint: numericHint,
+        expected: String(numericGCF)
+      },
+      {
+        id: 'variable-gcf',
+        label: 'Find the variable GCF',
+        hint: variableHint,
+        expected: variableGCFText
+      },
+      {
+        id: 'total-gcf',
+        label: 'Multiply the numeric and variable GCF to get the total GCF',
+        hint: totalGCFHint,
+        expected: totalGCF
+      },
+      {
+        id: 'inside',
+        label: 'Divide the expression by the total GCF to find what goes inside the parentheses',
+        hint: insideHint,
+        expected: insideExpression
+      }
+    ];
+
+    const gcfSteps = [
       {
         expression,
         rule: 'gcf',
         output: answer,
-        explanation: `The numeric GCF is ${numericGCF}, the variable GCF is ${variableGCFText}, so the total GCF is ${totalGCF}.`
+        explanation: `Numeric GCF: ${numericGCF}. Variable GCF: ${variableGCFText}. Total GCF: ${totalGCF}.`
       }
     ];
 
-    // --- Hints built with actual problem values ---
-    const coefficients = terms.map((t) => Math.abs(t.coefficient));
-    const numericHint = `What is the GCF of ${coefficients.join(', ')}?`;
+    return {
+      numericGCF,
+      xGCFExponent,
+      yGCFExponent,
+      variableGCFText,
+      totalGCF,
+      insideExpression,
+      answer,
+      gcfSteps,
+      gcfWorkflow
+    };
+  }
 
-    const variableHint = variableGCFExponent === 0
-      ? 'There is no variable factor shared by all terms — the variable GCF is 1.'
-      : `What is the lowest power of x that appears in every term? The exponents present are: ${terms.map((t) => t.exponent === 1 ? 'x' : `x^${t.exponent}`).join(', ')}.`;
+  // ---------------------------------------------------------------------------
+  // generateInsideTerms({ termCount, xExpRange, allowNegative, allowY, yExpRange })
+  //
+  // Generates inside terms with NO shared numeric, x, or y factor.
+  // Guarantees:
+  //   - At least one term has x exponent 0 (so x cannot be further factored)
+  //   - If any term has y, at least one term has no y (so y cannot be factored)
+  //   - gcd of all coefficients = 1
+  // ---------------------------------------------------------------------------
+  function generateInsideTerms({
+    termCount,
+    xExpRange,
+    allowNegative = false,
+    allowY = false,
+    yExpRange = [1, 2]
+  }) {
+    let terms;
+    let attempts = 0;
 
-    const totalGCFHint = variableGCFExponent === 0
-      ? `Multiply the numeric GCF (${numericGCF}) by the variable GCF (1). What do you get?`
-      : `Multiply the numeric GCF (${numericGCF}) by the variable GCF (${variableGCFText}). What do you get?`;
+    do {
+      attempts++;
+      if (attempts > 200) break;
 
-    const insideHint = `Divide every term of ${expression} by the total GCF (${totalGCF}). What expression is left?`;
-    const finalHint = `Write the total GCF (${totalGCF}) followed by the inside expression (${insideExpression}) in parentheses.`;
+      if (termCount === 2) {
+        const c1 = randInt(1, 8);
+        const c2 = randInt(1, 8) * (allowNegative ? choice([1, -1]) : 1);
+        const xExp = randInt(xExpRange[0], xExpRange[1]);
+        terms = [
+          { coefficient: c1, exponent: xExp },
+          { coefficient: c2, exponent: 0 }
+        ];
+        // Optionally add y to first term only — constant term has no y
+        if (allowY && choice([true, false])) {
+          terms[0].yExponent = randInt(yExpRange[0], yExpRange[1]);
+        }
 
-    // --- Workflow ---
+      } else {
+        const a = randInt(1, 5);
+        const b = randInt(1, 8) * (allowNegative ? choice([1, -1]) : 1);
+        const c = randInt(1, 6) * (allowNegative ? choice([1, -1]) : 1);
+        const leadExp = randInt(xExpRange[0], xExpRange[1]);
+        const midExp  = leadExp > 1 ? randInt(1, leadExp - 1) : 1;
+        terms = [
+          { coefficient: a, exponent: leadExp },
+          { coefficient: b, exponent: midExp },
+          { coefficient: c, exponent: 0 }
+        ];
+        // Optionally add y to some (not all) terms.
+        // Each term independently gets a y exponent. Only constraint: at least
+        // one term must end up with no y (so y can't be a common factor).
+        // This naturally covers all 6 patterns: 1, 2, 3, 1&2, 1&3, 2&3.
+        if (allowY && choice([true, false])) {
+          for (const term of terms) {
+            if (choice([true, false])) {
+              term.yExponent = randInt(yExpRange[0], yExpRange[1]);
+            }
+          }
+          // Guarantee at least one term has no y — clear a random term's y if needed
+          if (terms.every(t => (t.yExponent || 0) > 0)) {
+            terms[randInt(0, terms.length - 1)].yExponent = 0;
+          }
+        }
+      }
+
+      terms.sort((a, b) => b.exponent - a.exponent);
+
+    } while (!isValidInsideTerms(terms));
+
+    return terms;
+  }
+
+  function isValidInsideTerms(terms) {
+    if (!terms || terms.length === 0) return false;
+    // No zero coefficients
+    if (terms.some(t => t.coefficient === 0)) return false;
+    // No shared numeric factor
+    if (gcdList(terms.map(t => Math.abs(t.coefficient))) !== 1) return false;
+    // At least one term with x exponent 0
+    if (!terms.some(t => t.exponent === 0)) return false;
+    // If any term has y, at least one must have no y
+    const hasAnyY = terms.some(t => (t.yExponent || 0) > 0);
+    if (hasAnyY && !terms.some(t => (t.yExponent || 0) === 0)) return false;
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // generateGCFProblem(proficiency)
+  //
+  // Standalone GCF factoring problem. Calls generateGCFLayer with ranges
+  // tuned for the given proficiency level. All GCF logic lives in the layer —
+  // this function only defines ranges and generates the inside terms.
+  // ---------------------------------------------------------------------------
+  function generateGCFProblem(proficiency) {
+
+    const configs = {
+      emerging: {
+        coeffRange: [2, 5],
+        xExpRange:  [0, 0],
+        yExpRange:  [0, 0],
+        inside: { termCount: 2, xExpRange: [1, 2], allowNegative: false, allowY: false }
+      },
+      developing: {
+        coeffRange: [2, 6],
+        xExpRange:  [1, 2],
+        yExpRange:  [0, 0],
+        inside: { termCount: 2, xExpRange: [1, 2], allowNegative: false, allowY: false }
+      },
+      proficient: {
+        coeffRange: [2, 12],
+        xExpRange:  [0, 2],
+        yExpRange:  [0, 0],  // no y GCF — y may appear inside terms only
+        inside: { termCount: 3, xExpRange: [2, 3], allowNegative: true, allowY: true, yExpRange: [1, 2] }
+      },
+      extending: {
+        coeffRange: [2, 16],
+        xExpRange:  [1, 3],
+        yExpRange:  [0, 2],
+        inside: { termCount: 3, xExpRange: [2, 4], allowNegative: true, allowY: true, yExpRange: [1, 2] }
+      }
+    };
+
+    const config = configs[proficiency];
+    const insideTerms = generateInsideTerms(config.inside);
+
+    // First pass: get GCF components
+    const firstPass = generateGCFLayer({
+      coeffRange: config.coeffRange,
+      xExpRange:  config.xExpRange,
+      yExpRange:  config.yExpRange,
+      expression: '__placeholder__',
+      insideTerms
+    });
+
+    const { numericGCF, xGCFExponent, yGCFExponent } = firstPass;
+
+    // Build the real full polynomial
+    const fullTerms = insideTerms
+      .map(t => ({
+        coefficient: numericGCF * t.coefficient,
+        exponent:    t.exponent + xGCFExponent,
+        yExponent:   (t.yExponent || 0) + yGCFExponent
+      }))
+      .sort((a, b) => b.exponent - a.exponent);
+
+    const expression = formatPolynomial(fullTerms);
+
+    // Second pass: rebuild with real expression so hint text is accurate
+    const layer = generateGCFLayer({
+      coeffRange: [numericGCF, numericGCF],
+      xExpRange:  [xGCFExponent, xGCFExponent],
+      yExpRange:  [yGCFExponent, yGCFExponent],
+      expression,
+      insideTerms
+    });
+
+    const finalHint = `Write the total GCF (${layer.totalGCF}) followed by the inside expression in parentheses.`;
     const workflow = [
-      { id: 'numeric-gcf', label: 'Find the numeric GCF', hint: numericHint, expected: String(numericGCF) },
-      { id: 'variable-gcf', label: 'Find the variable GCF', hint: variableHint, expected: variableGCFText },
-      { id: 'total-gcf', label: 'Multiply the numeric and variable GCF to get the total GCF', hint: totalGCFHint, expected: totalGCF },
-      { id: 'inside', label: 'Divide the expression by the total GCF to find what goes inside the parentheses', hint: insideHint, expected: insideExpression },
-      { id: 'final', label: 'Write the factored form', hint: finalHint, expected: answer }
+      ...layer.gcfWorkflow,
+      { id: 'final', label: 'Write the factored form', hint: finalHint, expected: layer.answer }
     ];
 
     return {
       id: `gcf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       method: 'gcf',
-      difficulty,
+      proficiency,
       expression,
-      factors: [totalGCF, insideExpression],
-      answer,
-      steps,
+      factors: [layer.totalGCF, layer.insideExpression],
+      answer: layer.answer,
+      steps: layer.gcfSteps,
       workflow
     };
   }
 
-
   // ---------------------------------------------------------------------------
-  // generateDifferenceOfSquaresProblem(difficulty)
+  // generateDifferenceOfSquaresProblem(proficiency)
   //
-  // Generates a difference of squares problem: (ax)² − b² → (ax+b)(ax−b)
+  // Generates a difference of squares problem: A² − B² → (A+B)(A−B)
   //
   // Proficiency levels:
-  //   emerging:   leading coeff 1, small b (root 2–7)     e.g. x² − 9
-  //   developing: leading coeff 1, larger b (root 2–12)   e.g. x² − 144
-  //   proficient: leading coeff a perfect square (1,4,9)  e.g. 4x² − 25
-  //   extending:  both terms can have larger square roots  e.g. 9x² − 49
+  //   emerging:   x² − b², small roots (2–7)               e.g. x² − 9
+  //   developing: ax² − b², leading coeff a perfect square  e.g. 4x² − 25
+  //   proficient: ax^n − b², exponent 2, 4, or 6            e.g. 9x^4 − 49
+  //   extending:  two-variable DoS                          e.g. 4x² − 9y²
   // ---------------------------------------------------------------------------
-  function generateDifferenceOfSquaresProblem(difficulty) {
-    let aRoot, bRoot;
+  function generateDifferenceOfSquaresProblem(proficiency) {
+    let aRoot, bRoot, varExponent, useY;
 
-    if (difficulty === 'emerging') {
+    if (proficiency === 'emerging') {
       aRoot = 1;
       bRoot = randInt(2, 7);
-    } else if (difficulty === 'developing') {
-      aRoot = 1;
-      bRoot = randInt(2, 12);
-    } else if (difficulty === 'proficient') {
-      aRoot = choice([1, 2, 3]);
+      varExponent = 2;
+      useY = false;
+    } else if (proficiency === 'developing') {
+      aRoot = choice([2, 3, 4]);
       bRoot = randInt(2, 9);
-      // Avoid trivial aRoot=1 bRoot=small overlap with developing
-      if (aRoot === 1) bRoot = randInt(3, 12);
+      varExponent = 2;
+      useY = false;
+    } else if (proficiency === 'proficient') {
+      aRoot = choice([1, 2, 3, 4]);
+      bRoot = randInt(2, 11);
+      varExponent = choice([2, 4, 6]);
+      useY = false;
+      if (aRoot === 1 && varExponent === 2) bRoot = randInt(4, 11);
     } else {
-      // extending: both roots non-trivial, avoid perfect duplicates
-      // variable exponent can be 2, 4, or 6 (must be even for clean square root)
-      aRoot = choice([2, 3, 4, 5]);
-      do {
-        bRoot = randInt(2, 12);
-      } while (bRoot === aRoot);
+      aRoot = choice([1, 2, 3, 4]);
+      bRoot = choice([1, 2, 3, 4, 5]);
+      varExponent = 2;
+      useY = true;
     }
 
-    const a = aRoot * aRoot;   // leading coefficient (perfect square)
-    const b = bRoot * bRoot;   // constant (perfect square)
+    const a = aRoot * aRoot;
+    const b = bRoot * bRoot;
+    const halfExponent = varExponent / 2;
 
-    // Variable exponent: 2 for all levels, 2/4/6 for extending
-    const varExponent = difficulty === 'extending' ? choice([2, 4, 6]) : 2;
-    const halfExponent = varExponent / 2; // exponent in each factor's variable term
+    const expression = useY
+      ? formatPolynomial([
+          { coefficient: a,  exponent: varExponent },
+          { coefficient: -b, exponent: 0, yExponent: 2 }
+        ])
+      : formatPolynomial([
+          { coefficient: a,  exponent: varExponent },
+          { coefficient: -b, exponent: 0 }
+        ]);
 
-    // Polynomial: ax^varExponent − b
-    const expression = formatPolynomial([
-      { coefficient: a, exponent: varExponent },
-      { coefficient: -b, exponent: 0 }
-    ]);
-
-    // Factored form: (aRoot·x^halfExponent + bRoot)(aRoot·x^halfExponent − bRoot)
     const aRootTermText = formatFactorPiece(aRoot, halfExponent);
-    const leftFactor = aRootTermText + (bRoot >= 0 ? ` + ${bRoot}` : ` - ${Math.abs(bRoot)}`);
-    const rightFactor = aRootTermText + ` - ${bRoot}`;
-    const answer = `(${leftFactor})(${rightFactor})`;
+    const bRootTermText = useY ? formatFactorPiece(bRoot, 1, 'y') : String(bRoot);
+    const leftFactor    = `${aRootTermText} + ${bRootTermText}`;
+    const rightFactor   = `${aRootTermText} - ${bRootTermText}`;
+    const answer        = `(${leftFactor})(${rightFactor})`;
 
-    // --- Hints ---
-    const firstTermLabel = a === 1 ? `x^${varExponent}` : `${a}x^${varExponent}`;
-    const firstTermHint = a === 1 && varExponent === 2
-      ? `The first term is x². What is √(x²)?`
-      : `The first term is ${firstTermLabel}. What is √(${firstTermLabel})? Think: what times itself gives ${firstTermLabel}?`;
+    const firstTermDesc  = a === 1 && varExponent === 2 ? 'x²'
+      : a === 1 ? `x^${varExponent}`
+      : varExponent === 2 ? `${a}x²`
+      : `${a}x^${varExponent}`;
+    const secondTermDesc = useY ? (b === 1 ? 'y²' : `${b}y²`) : String(b);
 
-    const secondTermHint = `The second term is ${b}. What is √${b}?`;
-
-    const patternHint = `You have (something)² − (something)². This is a difference of squares: A² − B² = (A + B)(A − B). Here A = ${aRootTermText} and B = ${bRoot}.`;
-
-    const finalHint = `Write (A + B)(A − B) where A = ${aRootTermText} and B = ${bRoot}.`;
-
-    // --- Workflow ---
-    const aRootText = aRootTermText;
+    const firstTermHint  = `The first term is ${firstTermDesc}. What is √(${firstTermDesc})?`;
+    const secondTermHint = useY
+      ? `The second term is ${secondTermDesc}. What is √(${secondTermDesc})?`
+      : `The second term is ${b}. What is √${b}?`;
+    const finalHint = `Write (A + B)(A − B) where A = ${aRootTermText} and B = ${bRootTermText}.`;
 
     const workflow = [
-      {
-        id: 'first-root',
-        label: 'Find the square root of the first term',
-        hint: firstTermHint,
-        expected: aRootText
-      },
-      {
-        id: 'second-root',
-        label: 'Find the square root of the second term',
-        hint: secondTermHint,
-        expected: String(bRoot)
-      },
-      {
-        id: 'final',
-        label: 'Write the factored form (A + B)(A − B)',
-        hint: finalHint,
-        expected: answer
-      }
+      { id: 'first-root',  label: 'Find the square root of the first term',  hint: firstTermHint,  expected: aRootTermText },
+      { id: 'second-root', label: 'Find the square root of the second term', hint: secondTermHint, expected: bRootTermText },
+      { id: 'final',       label: 'Write the factored form (A + B)(A − B)',  hint: finalHint,      expected: answer }
     ];
 
-    // --- Steps (solution display) ---
     const steps = [
       {
         expression,
         rule: 'dos',
         output: answer,
-        explanation: `Difference of squares: √(${a === 1 ? '' : a}x^${varExponent}) = ${aRootText}, √${b} = ${bRoot}, so the factors are (${aRootText} + ${bRoot})(${aRootText} − ${bRoot}).`
+        explanation: `Difference of squares: √(${firstTermDesc}) = ${aRootTermText}, √(${secondTermDesc}) = ${bRootTermText}, so (${aRootTermText} + ${bRootTermText})(${aRootTermText} − ${bRootTermText}).`
       }
     ];
 
     return {
       id: `dos-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       method: 'dos',
-      difficulty,
+      proficiency,
       expression,
       factors: [leftFactor, rightFactor],
       answer,
@@ -317,9 +409,6 @@ window.Generators = (() => {
 
   // ---------------------------------------------------------------------------
   // generateProblem(settings)
-  //
-  // Dispatcher — routes to the correct generator based on settings.method.
-  // Future generators (trinomial, chained, etc.) get added here.
   // ---------------------------------------------------------------------------
   function generateProblem(settings) {
     if (settings.method === 'gcf') {
@@ -331,7 +420,5 @@ window.Generators = (() => {
     return null;
   }
 
-  return {
-    generateProblem
-  };
+  return { generateProblem };
 })();

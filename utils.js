@@ -57,25 +57,33 @@ window.Utils = (() => {
     return values.reduce((acc, value) => gcdTwo(acc, value));
   }
 
-  function formatFactorPiece(coefficient, exponent) {
+  function formatFactorPiece(coefficient, exponent, variable = 'x') {
     if (exponent === 0) return String(coefficient);
-    if (coefficient === 1) return exponent === 1 ? 'x' : `x^${exponent}`;
-    return exponent === 1 ? `${coefficient}x` : `${coefficient}x^${exponent}`;
+    if (coefficient === 1) return exponent === 1 ? variable : `${variable}^${exponent}`;
+    return exponent === 1 ? `${coefficient}${variable}` : `${coefficient}${variable}^${exponent}`;
   }
 
-  function formatInsideTerm(coefficient, exponent, isFirst) {
+  function formatInsideTerm(coefficient, exponent, isFirst, variable = 'x', yExponent = 0) {
     const sign = coefficient >= 0 ? (isFirst ? '' : ' + ') : (isFirst ? '-' : ' - ');
     const absCoeff = Math.abs(coefficient);
 
-    if (exponent === 0) return `${sign}${absCoeff}`;
+    // Build variable part: x portion + optional y portion
+    let varPart = '';
+    if (exponent > 0) {
+      varPart += exponent === 1 ? variable : `${variable}^${exponent}`;
+    }
+    if (yExponent > 0) {
+      varPart += yExponent === 1 ? 'y' : `y^${yExponent}`;
+    }
+
+    if (varPart === '') return `${sign}${absCoeff}`;
     const coeffPart = absCoeff === 1 ? '' : String(absCoeff);
-    const varPart = exponent === 1 ? 'x' : `x^${exponent}`;
     return `${sign}${coeffPart}${varPart}`;
   }
 
   function formatPolynomial(terms) {
     return terms
-      .map((term, index) => formatInsideTerm(term.coefficient, term.exponent, index === 0))
+      .map((term, index) => formatInsideTerm(term.coefficient, term.exponent, index === 0, term.variable || 'x', term.yExponent || 0))
       .join('');
   }
 
