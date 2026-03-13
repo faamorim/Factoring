@@ -49,7 +49,7 @@ window.Renderer = (() => {
         state.currentProblem.workflow.slice(0, hintsShown).forEach((hintStep) => {
           const hintEl = document.createElement('div');
           hintEl.className = 'step-hint';
-          hintEl.textContent = `💡 ${hintStep.hint}`;
+          hintEl.innerHTML = `💡 ${rawToPrettyHtml(hintStep.hint)}`;
           hintList.appendChild(hintEl);
         });
         wrapper.appendChild(hintList);
@@ -97,7 +97,7 @@ window.Renderer = (() => {
       if (state.revealedHints?.[step.id]) {
         const hintEl = document.createElement('div');
         hintEl.className = 'step-hint';
-        hintEl.textContent = `💡 ${step.hint}`;
+        hintEl.innerHTML = `💡 ${rawToPrettyHtml(step.hint)}`;
         item.appendChild(hintEl);
       }
 

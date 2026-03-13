@@ -411,6 +411,136 @@ window.Generators = (() => {
     };
   }
 
+
+  // ---------------------------------------------------------------------------
+  // generatePerfectSquareTrinomialProblem(proficiency)
+  //
+  // Generates a perfect square trinomial: A² + 2AB + B² → (A + B)²
+  //                                    or A² − 2AB + B² → (A − B)²
+  //
+  // The "verify middle term" step is pedagogically central — it teaches
+  // students to confirm the pattern rather than assume it.
+  //
+  // Proficiency levels:
+  //   emerging:   x² ± 2bx + b²          leading coeff 1, small b (2–6)
+  //   developing: x² ± 2bx + b²          leading coeff 1, b up to 12, b can be negative
+  //   proficient: a²x² ± 2abx + b²       leading coeff a perfect square
+  //   extending:  a²x^2n ± 2abx^n + b²   higher even exponents
+  // ---------------------------------------------------------------------------
+  function generatePerfectSquareTrinomialProblem(proficiency) {
+
+    const configs = {
+      emerging:   { aRootRange: [1, 1], bRootRange: [2, 6],  varExponents: [2],    allowNegativeB: false },
+      developing: { aRootRange: [1, 1], bRootRange: [2, 12], varExponents: [2],    allowNegativeB: true  },
+      proficient: { aRootRange: [2, 4], bRootRange: [2, 9],  varExponents: [2],    allowNegativeB: true  },
+      extending:  { aRootRange: [1, 4], bRootRange: [2, 9],  varExponents: [2, 4], allowNegativeB: true  }
+    };
+
+    const config = configs[proficiency];
+    const aRoot      = randInt(config.aRootRange[0], config.aRootRange[1]);
+    const bRootAbs   = randInt(config.bRootRange[0], config.bRootRange[1]);
+    const bRoot      = config.allowNegativeB ? bRootAbs * choice([1, -1]) : bRootAbs;
+    const varExponent = choice(config.varExponents);
+    const halfExp    = varExponent / 2; // exponent in each factor's variable term
+
+    // Avoid aRoot=1, varExponent=2 bleeding into developing territory at proficient
+    // by ensuring bRootAbs is in a meaningful range (already guaranteed by config)
+
+    // --- Build the three terms: a²x^2n ± 2ab·x^n + b² ---
+    const leadCoeff   = aRoot * aRoot;
+    const midCoeff    = 2 * aRoot * bRoot;       // signed: positive or negative
+    const constCoeff  = bRootAbs * bRootAbs;     // always positive (b²)
+    const midExponent = varExponent / 2;         // x^n in the middle term
+
+    const expression = formatPolynomial([
+      { coefficient: leadCoeff,  exponent: varExponent },
+      { coefficient: midCoeff,   exponent: midExponent },
+      { coefficient: constCoeff, exponent: 0 }
+    ]);
+
+    // --- Factored form: (aRoot·x^halfExp + bRoot)² or (aRoot·x^halfExp − |bRoot|)² ---
+    const aRootText  = formatFactorPiece(aRoot, halfExp);
+    const bSign      = bRoot >= 0 ? '+' : '−';
+    const innerFactor = `${aRootText} ${bSign} ${bRootAbs}`;
+    const answer      = `(${innerFactor})^2`;
+
+    // --- Descriptions for hints ---
+    const firstTermDesc = leadCoeff === 1 && varExponent === 2 ? 'x²'
+      : leadCoeff === 1 ? `x^${varExponent}`
+      : varExponent === 2 ? `${leadCoeff}x²`
+      : `${leadCoeff}x^${varExponent}`;
+
+    const middleTermDesc = (() => {
+      const absCoeff = Math.abs(midCoeff);
+      const varPart  = midExponent === 1 ? 'x' : `x^${midExponent}`;
+      const sign     = midCoeff >= 0 ? '+' : '−';
+      return `${sign} ${absCoeff}${varPart}`;
+    })();
+
+    const expectedMiddle = (() => {
+      const absCoeff = Math.abs(midCoeff);
+      const varPart  = midExponent === 1 ? 'x' : `x^${midExponent}`;
+      return midCoeff >= 0 ? `${absCoeff}${varPart}` : `-${absCoeff}${varPart}`;
+    })();
+
+    // --- Hints ---
+    const firstRootHint  = `The first term is ${firstTermDesc}. What is √(${firstTermDesc})?`;
+    const lastRootHint   = `The last term is ${constCoeff}. What is √${constCoeff}?`;
+    const verifyHint     = `Multiply 2 × (first root) × (last root): 2 × ${aRootText} × ${bRootAbs}. Does that match the middle term (${middleTermDesc})?`;
+    const finalHint      = bRoot >= 0
+      ? `Write (A + B)² where A = ${aRootText} and B = ${bRootAbs}.`
+      : `Write (A − B)² where A = ${aRootText} and B = ${bRootAbs}.`;
+
+    // --- Workflow ---
+    const workflow = [
+      {
+        id: 'first-root',
+        label: 'Find the square root of the first term',
+        hint: firstRootHint,
+        expected: aRootText
+      },
+      {
+        id: 'last-root',
+        label: 'Find the square root of the last term',
+        hint: lastRootHint,
+        expected: String(bRootAbs)
+      },
+      {
+        id: 'verify-middle',
+        label: `Verify: middle term = 2 × first_root × last_root`,
+        hint: verifyHint,
+        expected: expectedMiddle
+      },
+      {
+        id: 'final',
+        label: `Write the factored form (first_root ${bSign} last_root)²`,
+        hint: finalHint,
+        expected: answer
+      }
+    ];
+
+    // --- Steps ---
+    const steps = [
+      {
+        expression,
+        rule: 'pst',
+        output: answer,
+        explanation: `Perfect square trinomial: √(${firstTermDesc}) = ${aRootText}, √${constCoeff} = ${bRootAbs}, middle term = 2 × ${aRootText} × ${bRootAbs} = ${expectedMiddle} ✓`
+      }
+    ];
+
+    return {
+      id: `pst-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      method: 'pst',
+      proficiency,
+      expression,
+      factors: [innerFactor],
+      answer,
+      steps,
+      workflow
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // generateProblem(settings)
   // ---------------------------------------------------------------------------
@@ -420,6 +550,9 @@ window.Generators = (() => {
     }
     if (settings.method === 'dos') {
       return generateDifferenceOfSquaresProblem(settings.difficulty);
+    }
+    if (settings.method === 'pst') {
+      return generatePerfectSquareTrinomialProblem(settings.difficulty);
     }
     return null;
   }

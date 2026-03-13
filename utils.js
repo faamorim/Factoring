@@ -102,8 +102,10 @@ window.Utils = (() => {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-    // Wrap x and y in math-variable spans
-    return escaped.replace(/[xy]/g, (match) => `<span class="math-var">${match}</span>`);
+    // Wrap x and y in math-variable spans — only when not adjacent to non-math letters.
+    // Excludes x/y inside words like "Multiply", "exponent", "every" etc.
+    // Allows xy compound variables and standalone x/y next to digits/operators.
+    return escaped.replace(/(?<![a-wzA-WZ])[xy](?![a-wzA-WZ])/g, (match) => `<span class="math-var">${match}</span>`);
   }
 
   function normalizeRaw(raw) {
