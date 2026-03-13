@@ -37,17 +37,14 @@
     generateBtn: document.getElementById('generateBtn'),
     problemDisplay: document.getElementById('problemDisplay'),
     workArea: document.getElementById('workArea'),
-    checkBtn: document.getElementById('checkBtn'),
-    hintBtn: document.getElementById('hintBtn'),
-    solveStepBtn: document.getElementById('solveStepBtn'),
-    showSolutionBtn: document.getElementById('showSolutionBtn'),
     feedbackBox: document.getElementById('feedbackBox'),
     keypadStatus: document.getElementById('keypadStatus'),
     keypadGrid: document.getElementById('keypadGrid'),
     stepsOutput: document.getElementById('stepsOutput'),
     dockCheckBtn: document.getElementById('dockCheckBtn'),
     dockHintBtn: document.getElementById('dockHintBtn'),
-    dockSolveBtn: document.getElementById('dockSolveBtn')
+    dockSolveBtn: document.getElementById('dockSolveBtn'),
+    dockShowSolutionBtn: document.getElementById('dockShowSolutionBtn')
   };
 
   function setFeedback(message, type = 'info') {
@@ -291,10 +288,7 @@
   elements.dockCheckBtn.addEventListener('click', checkAnswers);
   elements.dockHintBtn.addEventListener('click', showHint);
   elements.dockSolveBtn.addEventListener('click', solveNextStep);
-  elements.checkBtn.addEventListener('click', checkAnswers);
-  elements.hintBtn.addEventListener('click', showHint);
-  elements.solveStepBtn.addEventListener('click', solveNextStep);
-  elements.showSolutionBtn.addEventListener('click', showFullSolution);
+  elements.dockShowSolutionBtn.addEventListener('click', showFullSolution);
 
   render();
 })();
