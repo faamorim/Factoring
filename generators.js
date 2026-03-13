@@ -316,36 +316,40 @@ window.Generators = (() => {
   //
   // Generates a difference of squares problem: A² − B² → (A+B)(A−B)
   //
-  // Proficiency levels:
-  //   emerging:   x² − b², small roots (2–7)               e.g. x² − 9
-  //   developing: ax² − b², leading coeff a perfect square  e.g. 4x² − 25
-  //   proficient: ax^n − b², exponent 2, 4, or 6            e.g. 9x^4 − 49
-  //   extending:  two-variable DoS                          e.g. 4x² − 9y²
+  // All problems are genuinely single-step — no factor can itself be a DoS.
+  // The y exponent in Extending is always exactly y² to prevent the second
+  // factor from becoming another difference of squares (which would make it
+  // a chained/full-factoring problem instead). Higher y exponents belong there.
+  //
+  // Proficiency levels — using notation where exponents are explicit squares:
+  //   emerging:   x² − b²          small b root (2–7)       e.g. x² − 25
+  //   developing: a²x² − b²        both terms need roots     e.g. 9x² − 16
+  //   proficient: a²x^2n − b²      higher x exponents        e.g. 4x^4 − 49
+  //   extending:  a²x^2n − b²y²    adds second variable      e.g. 9x^4 − 64y²
   // ---------------------------------------------------------------------------
   function generateDifferenceOfSquaresProblem(proficiency) {
-    let aRoot, bRoot, varExponent, useY;
+    // Config table: aRoot range, bRoot range, allowed varExponents, useY
+    // varExponent must always be even (half-exponent appears in each factor)
+    const configs = {
+      emerging:   { aRootRange: [1, 1], bRootRange: [2, 7],  varExponents: [2],       useY: false },
+      developing: { aRootRange: [2, 4], bRootRange: [2, 9],  varExponents: [2],       useY: false },
+      proficient: { aRootRange: [1, 4], bRootRange: [2, 11], varExponents: [2, 4, 6], useY: false },
+      extending:  { aRootRange: [2, 5], bRootRange: [2, 11], varExponents: [2, 4, 6], useY: true  }
+    };
 
-    if (proficiency === 'emerging') {
-      aRoot = 1;
-      bRoot = randInt(2, 7);
-      varExponent = 2;
-      useY = false;
-    } else if (proficiency === 'developing') {
-      aRoot = choice([2, 3, 4]);
-      bRoot = randInt(2, 9);
-      varExponent = 2;
-      useY = false;
-    } else if (proficiency === 'proficient') {
-      aRoot = choice([1, 2, 3, 4]);
-      bRoot = randInt(2, 11);
-      varExponent = choice([2, 4, 6]);
-      useY = false;
-      if (aRoot === 1 && varExponent === 2) bRoot = randInt(4, 11);
-    } else {
-      aRoot = choice([1, 2, 3, 4]);
-      bRoot = choice([1, 2, 3, 4, 5]);
-      varExponent = 2;
-      useY = true;
+    const config = configs[proficiency];
+    let aRoot = randInt(config.aRootRange[0], config.aRootRange[1]);
+    let bRoot = randInt(config.bRootRange[0], config.bRootRange[1]);
+    const varExponent = choice(config.varExponents);
+    const useY = config.useY;
+
+    // Avoid overlap: emerging-style problems slipping into proficient
+    if (proficiency === 'proficient' && aRoot === 1 && varExponent === 2) {
+      bRoot = randInt(4, 11);
+    }
+    // Extending: avoid aRoot === bRoot (trivial-looking problems)
+    if (proficiency === 'extending') {
+      while (bRoot === aRoot) bRoot = randInt(config.bRootRange[0], config.bRootRange[1]);
     }
 
     const a = aRoot * aRoot;
