@@ -55,6 +55,19 @@ window.Utils = (() => {
       .replace(/-/g, '−');
   }
 
+  // Like rawToPretty but returns safe HTML with variables wrapped in styled spans.
+  // Use this for innerHTML display fields only — not for plain text contexts.
+  function rawToPrettyHtml(raw) {
+    const pretty = rawToPretty(raw);
+    // Escape HTML special chars before injecting as innerHTML
+    const escaped = pretty
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    // Wrap x and y in math-variable spans
+    return escaped.replace(/[xy]/g, (match) => `<span class="math-var">${match}</span>`);
+  }
+
   function normalizeRaw(raw) {
     return raw
       .replace(/\s+/g, '')
@@ -74,6 +87,7 @@ window.Utils = (() => {
 
   return {
     choice,
+    rawToPrettyHtml,
     formatFactorPiece,
     formatPolynomial,
     gcdList,

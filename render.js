@@ -1,5 +1,5 @@
 window.Renderer = (() => {
-  const { rawToPretty } = window.Utils;
+  const { rawToPretty, rawToPrettyHtml } = window.Utils;
   const { ensureInputRecord, keypadButtons, selectInput } = window.InputController;
 
   function renderFeedback(state, elements) {
@@ -12,7 +12,7 @@ window.Renderer = (() => {
       elements.problemDisplay.textContent = 'Press Generate Problem';
       return;
     }
-    elements.problemDisplay.textContent = rawToPretty(state.currentProblem.expression);
+    elements.problemDisplay.innerHTML = rawToPrettyHtml(state.currentProblem.expression);
   }
 
   function renderWorkArea(state, elements, render) {
@@ -32,10 +32,29 @@ window.Renderer = (() => {
       if (state.activeInputId === 'final-answer') classes.push('active');
       if (!record.display) classes.push('placeholder');
       display.className = classes.join(' ');
-      display.textContent = record.display || 'Tap here to type your answer';
+      if (record.display) {
+        display.innerHTML = rawToPrettyHtml(record.display);
+      } else {
+        display.textContent = 'Tap here to type your answer';
+      }
       display.addEventListener('click', () => selectInput(state, 'final-answer', render));
 
       wrapper.appendChild(display);
+
+      // Progressive hints for final answer mode
+      const hintsShown = state.revealedHints?.['final-answer'] || 0;
+      if (hintsShown > 0) {
+        const hintList = document.createElement('div');
+        hintList.className = 'hint-list';
+        state.currentProblem.workflow.slice(0, hintsShown).forEach((hintStep) => {
+          const hintEl = document.createElement('div');
+          hintEl.className = 'step-hint';
+          hintEl.textContent = `💡 ${hintStep.hint}`;
+          hintList.appendChild(hintEl);
+        });
+        wrapper.appendChild(hintList);
+      }
+
       container.appendChild(wrapper);
       return;
     }
@@ -50,8 +69,10 @@ window.Renderer = (() => {
 
       const item = document.createElement('div');
       item.className = 'guided-step';
+      item.dataset.stepId = step.id;
       if (status === 'correct') item.classList.add('correct');
       if (status === 'incorrect') item.classList.add('incorrect');
+      if (status === 'downstream') item.classList.add('downstream');
 
       const label = document.createElement('div');
       label.className = 'step-label';
@@ -62,11 +83,24 @@ window.Renderer = (() => {
       if (state.activeInputId === step.id) classes.push('active');
       if (!record.display) classes.push('placeholder');
       display.className = classes.join(' ');
-      display.textContent = record.display || 'Tap here to type';
+      if (record.display) {
+        display.innerHTML = rawToPrettyHtml(record.display);
+      } else {
+        display.textContent = 'Tap here to type';
+      }
       display.addEventListener('click', () => selectInput(state, step.id, render));
 
       item.appendChild(label);
       item.appendChild(display);
+
+      // Inline hint, shown only after student requests it
+      if (state.revealedHints?.[step.id]) {
+        const hintEl = document.createElement('div');
+        hintEl.className = 'step-hint';
+        hintEl.textContent = `💡 ${step.hint}`;
+        item.appendChild(hintEl);
+      }
+
       list.appendChild(item);
     });
 
@@ -81,6 +115,7 @@ window.Renderer = (() => {
       button.type = 'button';
       button.textContent = buttonInfo.label;
       if (buttonInfo.className) button.className = buttonInfo.className;
+      if (buttonInfo.disabled) { button.disabled = true; return elements.keypadGrid.appendChild(button); }
       if (buttonInfo.value === 'exp' && state.exponentMode) button.classList.add('active');
 
       const isDigit = /^[0-9]$/.test(buttonInfo.value);

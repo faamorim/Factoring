@@ -2,24 +2,26 @@ window.InputController = (() => {
   const { rawToPretty } = window.Utils;
 
   const keypadButtons = [
-    { label: '7', value: '7' },
-    { label: '8', value: '8' },
-    { label: '9', value: '9' },
-    { label: '⌫', value: 'backspace', className: 'key-special' },
-    { label: '4', value: '4' },
-    { label: '5', value: '5' },
-    { label: '6', value: '6' },
-    { label: 'Clear', value: 'clear', className: 'key-special' },
-    { label: '1', value: '1' },
-    { label: '2', value: '2' },
-    { label: '3', value: '3' },
-    { label: 'exp', value: 'exp', className: 'key-special key-exp' },
-    { label: '0', value: '0' },
-    { label: 'x', value: 'x' },
-    { label: '+', value: '+' },
-    { label: '−', value: '-' },
-    { label: '(', value: '(' },
-    { label: ')', value: ')' }
+    { label: '7',    value: '7' },
+    { label: '8',    value: '8' },
+    { label: '9',    value: '9' },
+    { label: '⌫',   value: 'backspace', className: 'key-utility' },
+    { label: 'Clear', value: 'clear',   className: 'key-utility' },
+    { label: '4',    value: '4' },
+    { label: '5',    value: '5' },
+    { label: '6',    value: '6' },
+    { label: '+',    value: '+',        className: 'key-operator' },
+    { label: '−',    value: '-',        className: 'key-operator' },
+    { label: '1',    value: '1' },
+    { label: '2',    value: '2' },
+    { label: '3',    value: '3' },
+    { label: '(',    value: '(',        className: 'key-operator' },
+    { label: ')',    value: ')',        className: 'key-operator' },
+    { label: '0',    value: '0' },
+    { label: 'x',    value: 'x',       className: 'key-variable' },
+    { label: 'y',    value: 'y',       className: 'key-variable' },
+    { label: 'exp',  value: 'exp',     className: 'key-exp' },
+    { label: '',     value: '',        className: 'key-spacer', disabled: true }
   ];
 
   function ensureInputRecord(state, id) {
@@ -34,7 +36,7 @@ window.InputController = (() => {
   }
 
   function canUseExponentAfter(raw) {
-    return /x$/.test(raw);
+    return /[xy]$/.test(raw);
   }
 
   function selectInput(state, id, render) {

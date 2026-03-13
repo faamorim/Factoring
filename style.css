@@ -12,10 +12,19 @@
   --info: #1d4ed8;
   --info-bg: #eff6ff;
   --border: #d1d5db;
+  --key-utility: #0f766e;
+  --key-utility-hover: #115e59;
+  --key-operator: #7c3aed;
+  --key-operator-hover: #6d28d9;
+  --key-variable: #b45309;
+  --key-variable-hover: #92400e;
+  --key-exp: #2563eb;
+  --key-exp-hover: #1d4ed8;
+  --key-exp-active: #7c3aed;
   --shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
   --radius: 18px;
   --sticky-top-offset: 10px;
-  --keypad-height: 252px;
+  --keypad-height: 284px;
 }
 
 * { box-sizing: border-box; }
@@ -85,6 +94,15 @@ select {
 
 .button-field {
   display: flex;
+}
+
+.button-field button {
+  background: #0e7490;
+  width: 100%;
+}
+
+.button-field button:hover {
+  background: #0c6578;
 }
 
 button {
@@ -200,9 +218,46 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   background: #fef2f2;
 }
 
+.guided-step.downstream {
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+
+@keyframes step-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35); transform: scale(1); }
+  40%  { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); transform: scale(1.012); }
+  100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); transform: scale(1); }
+}
+
+.step-pulse {
+  animation: step-pulse 0.5s ease-out forwards;
+}
+
 .step-label {
   font-size: 0.95rem;
   color: var(--muted);
+}
+
+.math-var {
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 600;
+  color: var(--key-variable);
+}
+
+.hint-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.step-hint {
+  font-size: 0.9rem;
+  color: var(--info);
+  background: var(--info-bg);
+  border-radius: 10px;
+  padding: 8px 12px;
+  line-height: 1.4;
 }
 
 .feedback {
@@ -261,25 +316,62 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .keypad-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .keypad-grid button {
-  min-height: 48px;
-  font-size: 1.02rem;
+  min-height: 38px;
+  font-size: 0.98rem;
+  padding: 4px 6px;
 }
 
-.keypad-grid button.key-special {
-  background: #0f766e;
+.keypad-grid button.key-utility { background: var(--key-utility); }
+.keypad-grid button.key-utility:hover { background: var(--key-utility-hover); }
+
+.keypad-grid button.key-operator { background: var(--key-operator); }
+.keypad-grid button.key-operator:hover { background: var(--key-operator-hover); }
+
+.keypad-grid button.key-variable {
+  background: var(--key-variable);
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 600;
+}
+.keypad-grid button.key-variable:hover { background: var(--key-variable-hover); }
+
+.keypad-grid button.key-exp { background: var(--key-exp); }
+.keypad-grid button.key-exp:hover { background: var(--key-exp-hover); }
+.keypad-grid button.key-exp.active { background: var(--key-exp-active); }
+
+.keypad-grid button.key-spacer {
+  background: transparent;
+  box-shadow: none;
+  cursor: default;
+  pointer-events: none;
+  opacity: 0;
 }
 
-.keypad-grid button.key-special:hover {
-  background: #115e59;
+.keypad-dock-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 0 2px;
 }
 
-.keypad-grid button.key-exp.active {
-  background: #7c3aed;
+.keypad-dock-actions button {
+  flex: 1;
+  min-height: 34px;
+  font-size: 0.9rem;
+  padding: 4px 8px;
+  background: #0e7490;
+  color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.keypad-dock-actions button:hover {
+  background: #0c6578;
 }
 
 @media (min-width: 900px) {
@@ -292,6 +384,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     position: sticky;
     top: 122px;
   }
+
+  /* Desktop: hide dock actions, show action-row */
+  .keypad-dock-actions { display: none; }
+}
+
+@media (max-width: 899px) {
+  /* Mobile: hide desktop action-row, show dock actions */
+  .action-row { display: none; }
 }
 
 @media (max-width: 760px) {

@@ -23,11 +23,12 @@
         </div>
 
         <div class="field">
-          <label for="difficultySelect">Difficulty</label>
+          <label for="difficultySelect">Proficiency</label>
           <select id="difficultySelect">
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
+            <option value="emerging">Emerging</option>
+            <option value="developing">Developing</option>
+            <option value="proficient">Proficient</option>
+            <option value="extending">Extending</option>
           </select>
         </div>
 
@@ -78,6 +79,11 @@
   <section class="sticky-keypad-wrap">
     <div class="sticky-keypad card">
       <div class="keypad-status" id="keypadStatus">Tap an answer field, then use the keypad.</div>
+      <div class="keypad-dock-actions" id="keypadDockActions">
+        <button id="dockCheckBtn">Check</button>
+        <button id="dockHintBtn" class="secondary">Hint</button>
+        <button id="dockSolveBtn" class="secondary">Solve Step</button>
+      </div>
       <div class="keypad-grid" id="keypadGrid"></div>
     </div>
   </section>

@@ -14,7 +14,7 @@
   const state = {
     settings: {
       method: 'gcf',
-      difficulty: 'easy',
+      difficulty: 'emerging',
       mode: 'final'
     },
     currentProblem: null,
@@ -26,7 +26,8 @@
       type: 'info'
     },
     revealedSteps: 0,
-    stepStatuses: {}
+    stepStatuses: {},
+    revealedHints: {}
   };
 
   const elements = {
@@ -43,7 +44,10 @@
     feedbackBox: document.getElementById('feedbackBox'),
     keypadStatus: document.getElementById('keypadStatus'),
     keypadGrid: document.getElementById('keypadGrid'),
-    stepsOutput: document.getElementById('stepsOutput')
+    stepsOutput: document.getElementById('stepsOutput'),
+    dockCheckBtn: document.getElementById('dockCheckBtn'),
+    dockHintBtn: document.getElementById('dockHintBtn'),
+    dockSolveBtn: document.getElementById('dockSolveBtn')
   };
 
   function setFeedback(message, type = 'info') {
@@ -62,8 +66,13 @@
     state.exponentMode = false;
     state.revealedSteps = 0;
     state.stepStatuses = {};
+    state.revealedHints = {};
     setFeedback('New problem generated.', 'info');
     render();
+    setTimeout(() => {
+      const el = document.getElementById('problemDisplay');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
   }
 
   function checkFinalAnswer() {
@@ -77,19 +86,91 @@
     setFeedback(correct ? 'Correct!' : 'Not quite. Try again or use Hint / Solve Step.', correct ? 'success' : 'error');
   }
 
-  function checkGuidedAnswers() {
-    let allCorrect = true;
+  function pulseStep(id) {
+    const el = document.querySelector(`[data-step-id="${id}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => {
+      el.classList.remove('step-pulse');
+      void el.offsetWidth;
+      el.classList.add('step-pulse');
+      el.addEventListener('animationend', () => el.classList.remove('step-pulse'), { once: true });
+    }, 400);
+  }
 
-    state.currentProblem.workflow.forEach((step) => {
-      const record = state.inputValues[step.id];
-      const raw = record?.raw || '';
-      const correct = raw.trim() !== '' && compareAnswers(raw, step.expected);
-      state.stepStatuses[step.id] = raw.trim() === '' ? 'empty' : (correct ? 'correct' : 'incorrect');
-      if (!correct) allCorrect = false;
+  function evaluateGuidedSteps(revealHint) {
+    const workflow = state.currentProblem.workflow;
+    let firstWrongIndex = -1;
+
+    // Pass 1: find the first filled+wrong step
+    workflow.forEach((step, index) => {
+      const raw = state.inputValues[step.id]?.raw || '';
+      if (raw.trim() !== '' && !compareAnswers(raw, step.expected)) {
+        if (firstWrongIndex === -1) firstWrongIndex = index;
+      }
     });
 
+    // Pass 2: assign statuses
+    workflow.forEach((step, index) => {
+      const raw = state.inputValues[step.id]?.raw || '';
+      const filled = raw.trim() !== '';
+
+      if (!filled) {
+        state.stepStatuses[step.id] = 'empty';
+        return;
+      }
+
+      if (firstWrongIndex === -1) {
+        // No wrong steps — everything filled is correct
+        state.stepStatuses[step.id] = 'correct';
+      } else if (index < firstWrongIndex) {
+        state.stepStatuses[step.id] = 'correct';
+      } else if (index === firstWrongIndex) {
+        state.stepStatuses[step.id] = 'incorrect';
+      } else {
+        // Filled steps after the first wrong one are downstream casualties
+        state.stepStatuses[step.id] = 'downstream';
+      }
+    });
+
+    const blankSteps = workflow.filter((step) => !(state.inputValues[step.id]?.raw?.trim()));
+    const allFilled = blankSteps.length === 0;
+
+    if (firstWrongIndex === -1 && allFilled) {
+      // Everything correct and complete
+      render();
+      setFeedback('Excellent! Every step is correct.', 'success');
+      return;
+    }
+
+    if (firstWrongIndex === -1 && !allFilled) {
+      // Everything filled so far is correct, but some steps are still blank
+      render();
+      if (revealHint) {
+        const firstBlank = blankSteps[0];
+        state.revealedHints[firstBlank.id] = true;
+        render();
+        setFeedback(`Looking good so far! Hint added to the next step.`, 'info');
+        setTimeout(() => pulseStep(firstBlank.id), 50);
+      } else {
+        const remaining = blankSteps.length;
+        setFeedback(`Looking good so far — ${remaining} step${remaining > 1 ? 's' : ''} still to go.`, 'info');
+      }
+      return;
+    }
+
+    // There is a wrong step
+    const wrongStep = workflow[firstWrongIndex];
+    if (revealHint) {
+      state.revealedHints[wrongStep.id] = true;
+    }
     render();
-    setFeedback(allCorrect ? 'Excellent. Every guided step is correct.' : 'Some steps are still incorrect or blank.', allCorrect ? 'success' : 'error');
+    if (revealHint) {
+      setFeedback('Hint added to the incorrect step.', 'info');
+    } else {
+      setFeedback('One step needs attention — check the highlighted field.', 'error');
+    }
+    setTimeout(() => pulseStep(wrongStep.id), 50);
   }
 
   function checkAnswers() {
@@ -101,7 +182,7 @@
     if (state.settings.mode === 'final') {
       checkFinalAnswer();
     } else {
-      checkGuidedAnswers();
+      evaluateGuidedSteps(false);
     }
   }
 
@@ -110,9 +191,22 @@
       setFeedback('Generate a problem first.', 'error');
       return;
     }
-    const firstUnfilled = state.currentProblem.workflow.find((step) => !(state.inputValues[step.id]?.raw));
-    const hintStep = firstUnfilled || state.currentProblem.workflow[0];
-    setFeedback(`Hint: ${hintStep.label}.`, 'info');
+
+    if (state.settings.mode === 'guided') {
+      evaluateGuidedSteps(true);
+      return;
+    }
+
+    // Final answer mode: progressive hints, one per click, in workflow order
+    const workflow = state.currentProblem.workflow;
+    const hintsShown = state.revealedHints['final-answer'] || 0;
+    if (hintsShown >= workflow.length) {
+      setFeedback('All hints have been shown. Try Show Solution if you are still stuck.', 'info');
+      return;
+    }
+    state.revealedHints['final-answer'] = hintsShown + 1;
+    render();
+    setFeedback(`Hint ${hintsShown + 1} of ${workflow.length} added below.`, 'info');
   }
 
   function solveNextStep() {
@@ -194,6 +288,9 @@
   });
 
   elements.generateBtn.addEventListener('click', generateNewProblem);
+  elements.dockCheckBtn.addEventListener('click', checkAnswers);
+  elements.dockHintBtn.addEventListener('click', showHint);
+  elements.dockSolveBtn.addEventListener('click', solveNextStep);
   elements.checkBtn.addEventListener('click', checkAnswers);
   elements.hintBtn.addEventListener('click', showHint);
   elements.solveStepBtn.addEventListener('click', solveNextStep);

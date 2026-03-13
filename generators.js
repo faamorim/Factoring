@@ -8,92 +8,140 @@ window.Generators = (() => {
     randInt
   } = window.Utils;
 
+  // ---------------------------------------------------------------------------
+  // generateGCFLayer(difficulty)
+  //
+  // Shared primitive — returns ONLY the GCF components appropriate for the
+  // given difficulty: a numeric GCF and a variable GCF exponent.
+  //
+  // Deliberately knows nothing about inside terms. The caller is responsible
+  // for generating inside terms that suit its own purpose:
+  //   - generateGCFProblem: inside terms must be irreducible
+  //   - generateFullFactoringProblem (future): inside terms must be factorable
+  //
+  // Returns: { numericGCF, variableGCFExponent }
+  // ---------------------------------------------------------------------------
+  function generateGCFLayer(difficulty) {
+    if (difficulty === 'emerging') {
+      return {
+        numericGCF: choice([2, 3, 4, 5]),
+        variableGCFExponent: 0
+      };
+    }
+
+    if (difficulty === 'developing') {
+      return {
+        numericGCF: choice([2, 3, 4, 5, 6]),
+        variableGCFExponent: choice([1, 2])
+      };
+    }
+
+    if (difficulty === 'proficient') {
+      return {
+        numericGCF: choice([2, 3, 4, 5, 6, 8, 9, 10, 12]),
+        variableGCFExponent: choice([0, 1])
+      };
+    }
+
+    // extending
+    return {
+      numericGCF: choice([2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16]),
+      variableGCFExponent: choice([1, 2, 3])
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // generateGCFProblem(difficulty)
+  //
+  // Assembles a full standalone GCF problem:
+  //   1. Gets GCF components from generateGCFLayer
+  //   2. Generates inside terms guaranteed to be irreducible (no further
+  //      factoring possible), appropriate for the difficulty
+  //   3. Builds the full polynomial, answer, steps, workflow, and hints
+  // ---------------------------------------------------------------------------
   function generateGCFProblem(difficulty) {
-    let terms;
-    let numericGCF;
-    let variableGCFExponent;
+    const { numericGCF, variableGCFExponent } = generateGCFLayer(difficulty);
 
-    if (difficulty === 'easy') {
-      numericGCF = choice([2, 3, 4, 5, 6, 7, 8, 9]);
-      variableGCFExponent = 0;
+    // --- Generate inside terms based on difficulty ---
+    let insideTerms;
 
+    if (difficulty === 'emerging') {
+      // Two positive terms, no variable GCF, small coefficients
       let c1, c2;
       do {
-        c1 = randInt(2, 9);
-        c2 = randInt(2, 9) * choice([1, -1]);
+        c1 = randInt(2, 6);
+        c2 = randInt(2, 6);
       } while (gcdList([c1, c2]) !== 1);
 
-      const insideTerms = [
+      insideTerms = [
         { coefficient: c1, exponent: choice([1, 2]) },
         { coefficient: c2, exponent: 0 }
       ];
 
-      terms = insideTerms.map((term) => ({
-        coefficient: numericGCF * term.coefficient,
-        exponent: term.exponent
-      }));
-    } else if (difficulty === 'medium') {
-      numericGCF = choice([2, 3, 4, 5, 6, 8, 9, 10, 12]);
-      variableGCFExponent = choice([1, 2]);
+    } else if (difficulty === 'developing') {
+      // Two positive terms, variable GCF exponent already 1 from layer
+      let c1, c2;
+      do {
+        c1 = randInt(2, 8);
+        c2 = randInt(2, 8);
+      } while (gcdList([c1, c2]) !== 1);
 
+      insideTerms = [
+        { coefficient: c1, exponent: choice([1, 2]) },
+        { coefficient: c2, exponent: 0 }
+      ];
+
+    } else if (difficulty === 'proficient') {
+      // Three terms, b can be negative, c stays positive
       let a, b, c;
       do {
         a = randInt(1, 4);
-        b = randInt(-6, 6);
-        c = randInt(-6, 6);
+        b = randInt(1, 6) * choice([1, -1]);
+        c = randInt(1, 6);
       } while (
-        b === 0 ||
-        c === 0 ||
-        gcdList([a, b, c]) !== 1 ||
+        gcdList([Math.abs(a), Math.abs(b), c]) !== 1 ||
         !isLikelyIrreducibleQuadratic(a, b, c)
       );
 
-      const insideTerms = [
+      insideTerms = [
         { coefficient: a, exponent: 2 },
         { coefficient: b, exponent: 1 },
         { coefficient: c, exponent: 0 }
       ];
 
-      terms = insideTerms.map((term) => ({
-        coefficient: numericGCF * term.coefficient,
-        exponent: term.exponent + variableGCFExponent
-      }));
     } else {
-      numericGCF = choice([2, 3, 4, 5, 6, 8, 9, 10, 12]);
-      variableGCFExponent = choice([1, 2, 3]);
-
-      let a, b, c, leadingExponent;
+      // extending: three terms, full freedom, middle exponent randomized
+      let a, b, c, leadingExponent, middleExponent;
       do {
         a = randInt(1, 5);
         b = randInt(-8, 8);
         c = randInt(-8, 8);
-        leadingExponent = choice([2, 3]);
+        leadingExponent = choice([2, 3, 4]);
+        middleExponent = randInt(1, leadingExponent - 1);
       } while (
         b === 0 ||
         c === 0 ||
-        gcdList([a, b, c]) !== 1 ||
+        gcdList([Math.abs(a), Math.abs(b), Math.abs(c)]) !== 1 ||
         !isLikelyIrreducibleQuadratic(a, b, c)
       );
 
-      const insideTerms = [
+      insideTerms = [
         { coefficient: a, exponent: leadingExponent },
-        { coefficient: b, exponent: 1 },
+        { coefficient: b, exponent: middleExponent },
         { coefficient: c, exponent: 0 }
       ].sort((left, right) => right.exponent - left.exponent);
-
-      terms = insideTerms.map((term) => ({
-        coefficient: numericGCF * term.coefficient,
-        exponent: term.exponent + variableGCFExponent
-      }));
     }
 
-    terms.sort((left, right) => right.exponent - left.exponent);
+    // --- Build the full polynomial by scaling inside terms by the GCF ---
+    const terms = insideTerms
+      .map((term) => ({
+        coefficient: numericGCF * term.coefficient,
+        exponent: term.exponent + variableGCFExponent
+      }))
+      .sort((left, right) => right.exponent - left.exponent);
 
+    // --- Derived values ---
     const expression = formatPolynomial(terms);
-    const insideTerms = terms.map((term) => ({
-      coefficient: term.coefficient / numericGCF,
-      exponent: term.exponent - variableGCFExponent
-    }));
     const insideExpression = formatPolynomial(insideTerms);
 
     const totalGCF = variableGCFExponent === 0
@@ -108,6 +156,7 @@ window.Generators = (() => {
 
     const answer = `${totalGCF}(${insideExpression})`;
 
+    // --- Steps ---
     const steps = [
       {
         expression,
@@ -117,12 +166,28 @@ window.Generators = (() => {
       }
     ];
 
+    // --- Hints built with actual problem values ---
+    const coefficients = terms.map((t) => Math.abs(t.coefficient));
+    const numericHint = `What is the GCF of ${coefficients.join(', ')}?`;
+
+    const variableHint = variableGCFExponent === 0
+      ? 'There is no variable factor shared by all terms — the variable GCF is 1.'
+      : `What is the lowest power of x that appears in every term? The exponents present are: ${terms.map((t) => t.exponent === 1 ? 'x' : `x^${t.exponent}`).join(', ')}.`;
+
+    const totalGCFHint = variableGCFExponent === 0
+      ? `Multiply the numeric GCF (${numericGCF}) by the variable GCF (1). What do you get?`
+      : `Multiply the numeric GCF (${numericGCF}) by the variable GCF (${variableGCFText}). What do you get?`;
+
+    const insideHint = `Divide every term of ${expression} by the total GCF (${totalGCF}). What expression is left?`;
+    const finalHint = `Write the total GCF (${totalGCF}) followed by the inside expression (${insideExpression}) in parentheses.`;
+
+    // --- Workflow ---
     const workflow = [
-      { id: 'numeric-gcf', label: 'Find the numeric GCF', expected: String(numericGCF) },
-      { id: 'variable-gcf', label: 'Find the variable GCF', expected: variableGCFText },
-      { id: 'total-gcf', label: 'Multiply both to get the total GCF', expected: totalGCF },
-      { id: 'inside', label: 'Write the expression left inside the parentheses', expected: insideExpression },
-      { id: 'final', label: 'Write the factored form', expected: answer }
+      { id: 'numeric-gcf', label: 'Find the numeric GCF', hint: numericHint, expected: String(numericGCF) },
+      { id: 'variable-gcf', label: 'Find the variable GCF', hint: variableHint, expected: variableGCFText },
+      { id: 'total-gcf', label: 'Multiply the numeric and variable GCF to get the total GCF', hint: totalGCFHint, expected: totalGCF },
+      { id: 'inside', label: 'Divide the expression by the total GCF to find what goes inside the parentheses', hint: insideHint, expected: insideExpression },
+      { id: 'final', label: 'Write the factored form', hint: finalHint, expected: answer }
     ];
 
     return {
@@ -137,6 +202,12 @@ window.Generators = (() => {
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // generateProblem(settings)
+  //
+  // Dispatcher — routes to the correct generator based on settings.method.
+  // Future generators (trinomial, chained, etc.) get added here.
+  // ---------------------------------------------------------------------------
   function generateProblem(settings) {
     if (settings.method === 'gcf') {
       return generateGCFProblem(settings.difficulty);
