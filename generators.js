@@ -5,6 +5,7 @@ window.Generators = (() => {
     formatPolynomial,
     gcdList,
     isLikelyIrreducibleQuadratic,
+    isPerfectSquare,
     randInt
   } = window.Utils;
 
@@ -202,6 +203,118 @@ window.Generators = (() => {
     };
   }
 
+
+  // ---------------------------------------------------------------------------
+  // generateDifferenceOfSquaresProblem(difficulty)
+  //
+  // Generates a difference of squares problem: (ax)² − b² → (ax+b)(ax−b)
+  //
+  // Proficiency levels:
+  //   emerging:   leading coeff 1, small b (root 2–7)     e.g. x² − 9
+  //   developing: leading coeff 1, larger b (root 2–12)   e.g. x² − 144
+  //   proficient: leading coeff a perfect square (1,4,9)  e.g. 4x² − 25
+  //   extending:  both terms can have larger square roots  e.g. 9x² − 49
+  // ---------------------------------------------------------------------------
+  function generateDifferenceOfSquaresProblem(difficulty) {
+    let aRoot, bRoot;
+
+    if (difficulty === 'emerging') {
+      aRoot = 1;
+      bRoot = randInt(2, 7);
+    } else if (difficulty === 'developing') {
+      aRoot = 1;
+      bRoot = randInt(2, 12);
+    } else if (difficulty === 'proficient') {
+      aRoot = choice([1, 2, 3]);
+      bRoot = randInt(2, 9);
+      // Avoid trivial aRoot=1 bRoot=small overlap with developing
+      if (aRoot === 1) bRoot = randInt(3, 12);
+    } else {
+      // extending: both roots non-trivial, avoid perfect duplicates
+      // variable exponent can be 2, 4, or 6 (must be even for clean square root)
+      aRoot = choice([2, 3, 4, 5]);
+      do {
+        bRoot = randInt(2, 12);
+      } while (bRoot === aRoot);
+    }
+
+    const a = aRoot * aRoot;   // leading coefficient (perfect square)
+    const b = bRoot * bRoot;   // constant (perfect square)
+
+    // Variable exponent: 2 for all levels, 2/4/6 for extending
+    const varExponent = difficulty === 'extending' ? choice([2, 4, 6]) : 2;
+    const halfExponent = varExponent / 2; // exponent in each factor's variable term
+
+    // Polynomial: ax^varExponent − b
+    const expression = formatPolynomial([
+      { coefficient: a, exponent: varExponent },
+      { coefficient: -b, exponent: 0 }
+    ]);
+
+    // Factored form: (aRoot·x^halfExponent + bRoot)(aRoot·x^halfExponent − bRoot)
+    const aRootTermText = formatFactorPiece(aRoot, halfExponent);
+    const leftFactor = aRootTermText + (bRoot >= 0 ? ` + ${bRoot}` : ` - ${Math.abs(bRoot)}`);
+    const rightFactor = aRootTermText + ` - ${bRoot}`;
+    const answer = `(${leftFactor})(${rightFactor})`;
+
+    // --- Hints ---
+    const firstTermLabel = a === 1 ? `x^${varExponent}` : `${a}x^${varExponent}`;
+    const firstTermHint = a === 1 && varExponent === 2
+      ? `The first term is x². What is √(x²)?`
+      : `The first term is ${firstTermLabel}. What is √(${firstTermLabel})? Think: what times itself gives ${firstTermLabel}?`;
+
+    const secondTermHint = `The second term is ${b}. What is √${b}?`;
+
+    const patternHint = `You have (something)² − (something)². This is a difference of squares: A² − B² = (A + B)(A − B). Here A = ${aRootTermText} and B = ${bRoot}.`;
+
+    const finalHint = `Write (A + B)(A − B) where A = ${aRootTermText} and B = ${bRoot}.`;
+
+    // --- Workflow ---
+    const aRootText = aRootTermText;
+
+    const workflow = [
+      {
+        id: 'first-root',
+        label: 'Find the square root of the first term',
+        hint: firstTermHint,
+        expected: aRootText
+      },
+      {
+        id: 'second-root',
+        label: 'Find the square root of the second term',
+        hint: secondTermHint,
+        expected: String(bRoot)
+      },
+      {
+        id: 'final',
+        label: 'Write the factored form (A + B)(A − B)',
+        hint: finalHint,
+        expected: answer
+      }
+    ];
+
+    // --- Steps (solution display) ---
+    const steps = [
+      {
+        expression,
+        rule: 'dos',
+        output: answer,
+        explanation: `Difference of squares: √(${a === 1 ? '' : a}x^${varExponent}) = ${aRootText}, √${b} = ${bRoot}, so the factors are (${aRootText} + ${bRoot})(${aRootText} − ${bRoot}).`
+      }
+    ];
+
+    return {
+      id: `dos-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      method: 'dos',
+      difficulty,
+      expression,
+      factors: [leftFactor, rightFactor],
+      answer,
+      steps,
+      workflow
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // generateProblem(settings)
   //
@@ -211,6 +324,9 @@ window.Generators = (() => {
   function generateProblem(settings) {
     if (settings.method === 'gcf') {
       return generateGCFProblem(settings.difficulty);
+    }
+    if (settings.method === 'dos') {
+      return generateDifferenceOfSquaresProblem(settings.difficulty);
     }
     return null;
   }

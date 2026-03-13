@@ -108,6 +108,12 @@ window.Utils = (() => {
       .replace(/\)([0-9a-zA-Z])/g, ')*$1');
   }
 
+  function isPerfectSquare(n) {
+    if (n < 0) return false;
+    const root = Math.round(Math.sqrt(n));
+    return root * root === n;
+  }
+
   function isLikelyIrreducibleQuadratic(a, b, c) {
     const disc = b * b - 4 * a * c;
     if (disc < 0) return true;
@@ -125,6 +131,7 @@ window.Utils = (() => {
     formatPolynomial,
     gcdList,
     isLikelyIrreducibleQuadratic,
+    isPerfectSquare,
     normalizeRaw,
     randInt,
     rawToPretty
