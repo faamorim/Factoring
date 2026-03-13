@@ -429,39 +429,74 @@ window.Generators = (() => {
   // ---------------------------------------------------------------------------
   function generatePerfectSquareTrinomialProblem(proficiency) {
 
+    // Proficiency levels — using notation where exponents are explicit squares:
+    //   emerging:   x² ± 2bx + b²              leading coeff 1, positive b only
+    //   developing: x² ± 2bx + b²              leading coeff 1, b can be negative
+    //   proficient: a²x² ± 2abx + b²           leading coeff a perfect square
+    //   extending:  a²x^2n ± 2abx^n + b²y²     higher exponents, adds y variable
+    //               OR a²x^2n ± 2abx^n + b²    higher exponents, single variable
+    //
+    // Two-variable form (ax ± by)² — curriculum-standard, matches GCF and DoS
+    // in having y appear at Extending level.
+    //
+    // Chained factoring prevention: if bRoot is negative AND both aRoot and
+    // bRootAbs are perfect squares AND varExponent === 2, the factor (ax ± b)
+    // would itself be a difference of squares — rejected via retry loop.
     const configs = {
-      emerging:   { aRootRange: [1, 1], bRootRange: [2, 6],  varExponents: [2],    allowNegativeB: false },
-      developing: { aRootRange: [1, 1], bRootRange: [2, 12], varExponents: [2],    allowNegativeB: true  },
-      proficient: { aRootRange: [2, 4], bRootRange: [2, 9],  varExponents: [2],    allowNegativeB: true  },
-      extending:  { aRootRange: [1, 4], bRootRange: [2, 9],  varExponents: [2, 4], allowNegativeB: true  }
+      emerging:   { aRootRange: [1, 1], bRootRange: [2, 6],  varExponents: [2],    allowNegativeB: false, allowY: false },
+      developing: { aRootRange: [1, 1], bRootRange: [2, 12], varExponents: [2],    allowNegativeB: true,  allowY: false },
+      proficient: { aRootRange: [2, 4], bRootRange: [2, 9],  varExponents: [2],    allowNegativeB: true,  allowY: false },
+      extending:  { aRootRange: [1, 4], bRootRange: [2, 9],  varExponents: [2, 4], allowNegativeB: true,  allowY: true  }
     };
 
     const config = configs[proficiency];
-    const aRoot      = randInt(config.aRootRange[0], config.aRootRange[1]);
-    const bRootAbs   = randInt(config.bRootRange[0], config.bRootRange[1]);
-    const bRoot      = config.allowNegativeB ? bRootAbs * choice([1, -1]) : bRootAbs;
-    const varExponent = choice(config.varExponents);
-    const halfExp    = varExponent / 2; // exponent in each factor's variable term
+    let aRoot, bRootAbs, bRoot, varExponent;
 
-    // Avoid aRoot=1, varExponent=2 bleeding into developing territory at proficient
-    // by ensuring bRootAbs is in a meaningful range (already guaranteed by config)
+    // Generate components, then fix any chained-factoring situation deterministically.
+    // A chained problem occurs when bRoot is negative AND varExponent === 2 AND both
+    // aRoot and bRootAbs are perfect squares — making the factor (ax ± b) itself a DoS.
+    // Fix: increment bRootAbs by 1. Adding 1 to any perfect square > 1 always produces
+    // a non-perfect-square (no two consecutive integers are both perfect squares above 1),
+    // so this resolves the condition in a single step with no loop needed.
+    aRoot      = randInt(config.aRootRange[0], config.aRootRange[1]);
+    bRootAbs   = randInt(config.bRootRange[0], config.bRootRange[1]);
+    bRoot      = config.allowNegativeB ? bRootAbs * choice([1, -1]) : bRootAbs;
+    varExponent = choice(config.varExponents);
 
-    // --- Build the three terms: a²x^2n ± 2ab·x^n + b² ---
+    if (bRoot < 0 && varExponent === 2 && isPerfectSquare(aRoot) && isPerfectSquare(bRootAbs)) {
+      bRootAbs += 1;
+      bRoot = -bRootAbs;
+    }
+
+    // 50% chance of two-variable form at Extending: (ax^n ± by)²
+    const useY = config.allowY && choice([true, false]);
+    const halfExp = varExponent / 2;
+
+    // --- Build the three terms ---
+    // Single-variable: a²x^2n ± 2ab·x^n + b²       → (ax^n ± b)²
+    // Two-variable:    a²x^2n ± 2ab·x^n·y + b²y²   → (ax^n ± by)²
     const leadCoeff   = aRoot * aRoot;
-    const midCoeff    = 2 * aRoot * bRoot;       // signed: positive or negative
-    const constCoeff  = bRootAbs * bRootAbs;     // always positive (b²)
-    const midExponent = varExponent / 2;         // x^n in the middle term
+    const midCoeff    = 2 * aRoot * bRoot;    // signed
+    const constCoeff  = bRootAbs * bRootAbs;  // always positive
+    const midExponent = halfExp;              // x^n in middle term
 
-    const expression = formatPolynomial([
-      { coefficient: leadCoeff,  exponent: varExponent },
-      { coefficient: midCoeff,   exponent: midExponent },
-      { coefficient: constCoeff, exponent: 0 }
-    ]);
+    const expression = useY
+      ? formatPolynomial([
+          { coefficient: leadCoeff,  exponent: varExponent, yExponent: 0 },
+          { coefficient: midCoeff,   exponent: midExponent, yExponent: 1 },
+          { coefficient: constCoeff, exponent: 0,           yExponent: 2 }
+        ])
+      : formatPolynomial([
+          { coefficient: leadCoeff,  exponent: varExponent },
+          { coefficient: midCoeff,   exponent: midExponent },
+          { coefficient: constCoeff, exponent: 0 }
+        ]);
 
-    // --- Factored form: (aRoot·x^halfExp + bRoot)² or (aRoot·x^halfExp − |bRoot|)² ---
-    const aRootText  = formatFactorPiece(aRoot, halfExp);
+    // --- Factored form ---
+    const aRootText  = formatFactorPiece(aRoot, halfExp);          // e.g. 2x^2
+    const bRootText  = useY ? formatFactorPiece(bRootAbs, 1, 'y') : String(bRootAbs); // e.g. 3y or 3
     const bSign      = bRoot >= 0 ? '+' : '−';
-    const innerFactor = `${aRootText} ${bSign} ${bRootAbs}`;
+    const innerFactor = `${aRootText} ${bSign} ${bRootText}`;
     const answer      = `(${innerFactor})^2`;
 
     // --- Descriptions for hints ---
@@ -470,26 +505,36 @@ window.Generators = (() => {
       : varExponent === 2 ? `${leadCoeff}x²`
       : `${leadCoeff}x^${varExponent}`;
 
+    const lastTermDesc = useY
+      ? (constCoeff === 1 ? 'y²' : `${constCoeff}y²`)
+      : String(constCoeff);
+
     const middleTermDesc = (() => {
       const absCoeff = Math.abs(midCoeff);
-      const varPart  = midExponent === 1 ? 'x' : `x^${midExponent}`;
-      const sign     = midCoeff >= 0 ? '+' : '−';
+      const varPart  = useY
+        ? (midExponent === 1 ? 'xy' : `x^${midExponent}y`)
+        : (midExponent === 1 ? 'x'  : `x^${midExponent}`);
+      const sign = midCoeff >= 0 ? '+' : '−';
       return `${sign} ${absCoeff}${varPart}`;
     })();
 
     const expectedMiddle = (() => {
       const absCoeff = Math.abs(midCoeff);
-      const varPart  = midExponent === 1 ? 'x' : `x^${midExponent}`;
+      const varPart  = useY
+        ? (midExponent === 1 ? 'xy' : `x^${midExponent}y`)
+        : (midExponent === 1 ? 'x'  : `x^${midExponent}`);
       return midCoeff >= 0 ? `${absCoeff}${varPart}` : `-${absCoeff}${varPart}`;
     })();
 
     // --- Hints ---
-    const firstRootHint  = `The first term is ${firstTermDesc}. What is √(${firstTermDesc})?`;
-    const lastRootHint   = `The last term is ${constCoeff}. What is √${constCoeff}?`;
-    const verifyHint     = `Multiply 2 × (first root) × (last root): 2 × ${aRootText} × ${bRootAbs}. Does that match the middle term (${middleTermDesc})?`;
-    const finalHint      = bRoot >= 0
-      ? `Write (A + B)² where A = ${aRootText} and B = ${bRootAbs}.`
-      : `Write (A − B)² where A = ${aRootText} and B = ${bRootAbs}.`;
+    const firstRootHint = `The first term is ${firstTermDesc}. What is √(${firstTermDesc})?`;
+    const lastRootHint  = useY
+      ? `The last term is ${lastTermDesc}. What is √(${lastTermDesc})?`
+      : `The last term is ${constCoeff}. What is √${constCoeff}?`;
+    const verifyHint    = `Multiply 2 × (first root) × (last root): 2 × ${aRootText} × ${bRootText}. Does that match the middle term (${middleTermDesc})?`;
+    const finalHint     = bRoot >= 0
+      ? `Write (first_root + last_root)² where first_root = ${aRootText} and last_root = ${bRootText}.`
+      : `Write (first_root − last_root)² where first_root = ${aRootText} and last_root = ${bRootText}.`;
 
     // --- Workflow ---
     const workflow = [
@@ -503,7 +548,7 @@ window.Generators = (() => {
         id: 'last-root',
         label: 'Find the square root of the last term',
         hint: lastRootHint,
-        expected: String(bRootAbs)
+        expected: bRootText
       },
       {
         id: 'verify-middle',
