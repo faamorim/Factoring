@@ -4,8 +4,38 @@ window.Utils = (() => {
     '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'
   };
 
+  // ---------------------------------------------------------------------------
+  // Seeded RNG — Mulberry32 algorithm.
+  // Fast, simple, high-quality 32-bit generator. When a seed is active,
+  // randInt and choice produce deterministic sequences. Call setSeed(n) before
+  // generating a problem, clearSeed() to go back to Math.random().
+  // ---------------------------------------------------------------------------
+  let _rng = null;
+
+  function generateSeed() {
+    return Math.floor(Math.random() * 1_000_000);
+  }
+
+  function setSeed(seed) {
+    let s = seed >>> 0; // ensure unsigned 32-bit integer
+    _rng = () => {
+      s += 0x6d2b79f5;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+      return ((t ^ (t >>> 14)) >>> 0) / 0x100000000;
+    };
+  }
+
+  function clearSeed() {
+    _rng = null;
+  }
+
+  function _random() {
+    return _rng ? _rng() : Math.random();
+  }
+
   function randInt(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+    return Math.floor(_random() * (max - min + 1)) + min;
   }
 
   function choice(arr) {
@@ -87,6 +117,9 @@ window.Utils = (() => {
 
   return {
     choice,
+    generateSeed,
+    setSeed,
+    clearSeed,
     rawToPrettyHtml,
     formatFactorPiece,
     formatPolynomial,

@@ -1,5 +1,5 @@
 (() => {
-  const { normalizeRaw, rawToPretty } = window.Utils;
+  const { normalizeRaw, rawToPretty, generateSeed, setSeed, clearSeed } = window.Utils;
   const { generateProblem } = window.Generators;
   const { insertIntoActiveInput } = window.InputController;
   const {
@@ -25,6 +25,8 @@
       message: 'Generate a problem to start.',
       type: 'info'
     },
+    seed: null,
+    lastGenerationParams: null,
     revealedSteps: 0,
     stepStatuses: {},
     revealedHints: {}
@@ -44,7 +46,8 @@
     dockCheckBtn: document.getElementById('dockCheckBtn'),
     dockHintBtn: document.getElementById('dockHintBtn'),
     dockSolveBtn: document.getElementById('dockSolveBtn'),
-    dockShowSolutionBtn: document.getElementById('dockShowSolutionBtn')
+    dockShowSolutionBtn: document.getElementById('dockShowSolutionBtn'),
+    copyLinkBtn: document.getElementById('copyLinkBtn')
   };
 
   function setFeedback(message, type = 'info') {
@@ -56,8 +59,14 @@
     return normalizeRaw(studentRaw) === normalizeRaw(expectedRaw);
   }
 
-  function generateNewProblem() {
+  function generateNewProblem(seed = null) {
+    state.seed = seed !== null ? seed : generateSeed();
+    state.lastGenerationParams = { ...state.settings, seed: state.seed };
+    const p = [state.settings.method, state.settings.difficulty, state.settings.mode, state.seed].join('.');
+    history.replaceState(null, '', `?p=${p}`);
+    setSeed(state.seed);
     state.currentProblem = generateProblem(state.settings);
+    clearSeed();
     state.inputValues = {};
     state.activeInputId = null;
     state.exponentMode = false;
@@ -70,6 +79,39 @@
       const el = document.getElementById('problemDisplay');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
+  }
+
+  function copyLink() {
+    const { method, difficulty, mode, seed } = state.lastGenerationParams;
+    const p = [method, difficulty, mode, seed].join('.');
+    const url = `${location.origin}${location.pathname}?p=${p}`;
+    navigator.clipboard.writeText(url).then(() => {
+      const btn = elements.copyLinkBtn;
+      const original = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = original; }, 1800);
+    });
+  }
+
+  function readUrlParams() {
+    const params = new URLSearchParams(location.search);
+    const p = params.get('p');
+    if (!p) return false;
+    const parts = p.split('.');
+    if (parts.length !== 4) return;
+    const [method, difficulty, mode, seedStr] = parts;
+    const seed = parseInt(seedStr, 10);
+    if (isNaN(seed)) return;
+    // Apply settings to selects
+    state.settings.method = method;
+    state.settings.difficulty = difficulty;
+    state.settings.mode = mode;
+    if (elements.methodSelect) elements.methodSelect.value = method;
+    if (elements.difficultySelect) elements.difficultySelect.value = difficulty;
+    if (elements.modeSelect) elements.modeSelect.value = mode;
+    // Generate the problem with the exact seed
+    generateNewProblem(seed);
+    return true;
   }
 
   function checkFinalAnswer() {
@@ -267,6 +309,9 @@
     renderKeypad(state, elements, (value) => insertIntoActiveInput(state, value, { render, setFeedback }));
     renderKeypadStatus(state, elements);
     renderStepsOutput(state, elements);
+    if (elements.copyLinkBtn) {
+      elements.copyLinkBtn.style.display = state.currentProblem ? 'inline-block' : 'none';
+    }
   }
 
   elements.methodSelect.addEventListener('change', (event) => {
@@ -284,11 +329,12 @@
     render();
   });
 
-  elements.generateBtn.addEventListener('click', generateNewProblem);
+  elements.generateBtn.addEventListener('click', () => generateNewProblem());
   elements.dockCheckBtn.addEventListener('click', checkAnswers);
   elements.dockHintBtn.addEventListener('click', showHint);
   elements.dockSolveBtn.addEventListener('click', solveNextStep);
   elements.dockShowSolutionBtn.addEventListener('click', showFullSolution);
+  elements.copyLinkBtn.addEventListener('click', copyLink);
 
-  render();
+  readUrlParams() || render();
 })();
