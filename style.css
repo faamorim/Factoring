@@ -149,6 +149,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: clamp(1.15rem, 3.7vw, 1.75rem);
   background: #fafafa;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .main-layout {

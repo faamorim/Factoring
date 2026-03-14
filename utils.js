@@ -131,8 +131,52 @@ window.Utils = (() => {
     return !Number.isInteger(root);
   }
 
+  // ---------------------------------------------------------------------------
+  // buildFromPrimes(pool, maxPrimeCount, maxFactor)
+  //
+  // Builds an integer by multiplying primes drawn from a weighted pool.
+  // Before each multiplication, the pool is filtered to primes that keep
+  // the running product within maxFactor — guaranteeing the result never
+  // exceeds maxFactor with no rejection loop needed.
+  //
+  // maxPrimeCount and maxFactor may each be a [min, max] range — a random
+  // value is chosen within that range each call, giving natural variance.
+  //
+  // Parameters:
+  //   pool          array of primes (repeated entries = higher probability)
+  //   maxPrimeCount number or [min, max] — max prime factors to multiply
+  //   maxFactor     number or [min, max] — ceiling on the result
+  // ---------------------------------------------------------------------------
+  function buildFromPrimes(pool, maxPrimeCount, maxFactor) {
+    const primeLimit  = Array.isArray(maxPrimeCount) ? randInt(maxPrimeCount[0], maxPrimeCount[1]) : maxPrimeCount;
+    const factorLimit = Array.isArray(maxFactor)     ? randInt(maxFactor[0],     maxFactor[1])     : maxFactor;
+    let current = 1;
+    for (let i = 0; i < primeLimit; i++) {
+      const available = pool.filter(p => p <= factorLimit / current);
+      if (available.length === 0) break;
+      current *= choice(available);
+    }
+    return current;
+  }
+
+  // ---------------------------------------------------------------------------
+  // formatLinearFactor(root)
+  //
+  // Formats a linear factor as a readable string with correct sign display.
+  // Used wherever (x + n) or (x − n) factors appear.
+  //   formatLinearFactor(3)  → "x + 3"
+  //   formatLinearFactor(-5) → "x - 5"
+  //   formatLinearFactor(0)  → "x"  (degenerate case, included for safety)
+  // ---------------------------------------------------------------------------
+  function formatLinearFactor(root) {
+    if (root === 0) return 'x';
+    return root > 0 ? `x + ${root}` : `x - ${Math.abs(root)}`;
+  }
+
   return {
+    buildFromPrimes,
     choice,
+    formatLinearFactor,
     generateSeed,
     setSeed,
     clearSeed,

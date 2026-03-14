@@ -1,7 +1,9 @@
 window.Generators = (() => {
   const {
+    buildFromPrimes,
     choice,
     formatFactorPiece,
+    formatLinearFactor,
     formatPolynomial,
     gcdList,
     isLikelyIrreducibleQuadratic,
@@ -586,6 +588,195 @@ window.Generators = (() => {
     };
   }
 
+
+  // ---------------------------------------------------------------------------
+  // generateSimpleTrinomialProblem(proficiency)
+  //
+  // Generates a simple trinomial: x² + bx + c → (x + p)(x + q)
+  // where p × q = c and p + q = b, with a = 1 always.
+  //
+  // Numbers are built progressively from prime factors for precise control:
+  //   - pool is filtered at each step to primes that keep the result <= maxFactor
+  //   - this guarantees the factor ceiling with no rejection loop
+  //   - weighted prime pool skews toward smaller primes naturally
+  //   - highly composite numbers (many small prime factors) are harder to
+  //     factor than large primes — more candidate pairs to test before finding
+  //     the one that satisfies both the product AND sum conditions
+  //
+  // Proficiency levels and sign rules:
+  //   emerging:   p, q both positive  — b and c both positive
+  //   developing: p, q both negative  — b negative, c positive
+  //   proficient: one positive, one negative (mixed, |p|≠|q|) — c negative
+  //   extending:  one positive, one negative, highly composite — c negative, small |b|
+  //
+  // |p| ≠ |q| always — prevents perfect square trinomials (p=q) and
+  // difference-of-squares disguised as trinomials (p=−q gives b=0).
+  //
+  // Workflow (4 steps):
+  //   1. Find two integers that multiply to c  (comma-separated input)
+  //   2. Verify they multiply to c
+  //   3. Verify they add to b
+  //   4. Write the factored form
+  // ---------------------------------------------------------------------------
+  function generateSimpleTrinomialProblem(proficiency) {
+
+    // Config per proficiency:
+    //   pool          weighted prime pool (repeated entries = higher probability)
+    //   maxPrimeCount max number of prime factors to multiply together
+    //   maxFactor     hard ceiling on each factor — guaranteed by progressive build
+    //   signs         sign rule applied after generation
+    //
+    // No 11 or 13 in any pool — large primes reduce factor pair count, making
+    // problems harder in the wrong way (one obvious pair vs many to search).
+    // No 5 in the extending pool — with multiple 2s also present, 5 almost
+    // guarantees factors ending in 0, making products suspiciously round.
+    // maxPrimeCount and maxFactor are [min, max] ranges — buildFromPrimes picks
+    // a random value within each range per call, giving natural variance within
+    // each proficiency level without needing a stopChance hack.
+    // signs arrays are weighted pools — choice() gives the distribution naturally.
+    // For mixed sign mode, the larger factor randomly takes positive or negative,
+    // so b can be either sign and students must read it carefully.
+    const configs = {
+      emerging: {
+        pool: [2, 2, 3, 3, 5],
+        maxPrimeCount: [1, 2],
+        maxFactor: [4, 12],
+        signs: ['both-positive']
+      },
+      developing: {
+        pool: [2, 2, 3, 3, 5],
+        maxPrimeCount: [1, 3],
+        maxFactor: [6, 18],
+        signs: ['both-negative', 'both-negative', 'both-negative', 'both-positive']  // 75% negative
+      },
+      proficient: {
+        pool: [2, 3, 5, 7],
+        maxPrimeCount: [1, 2],
+        maxFactor: [6, 20],
+        signs: ['mixed', 'mixed', 'mixed', 'both-positive', 'both-negative']  // 60% mixed
+      },
+      extending: {
+        pool: [2, 2, 3, 3, 7],
+        maxPrimeCount: [2, 4],
+        maxFactor: [12, 36],
+        signs: ['mixed', 'mixed', 'mixed', 'mixed', 'both-positive', 'both-negative']  // 67% mixed
+      }
+    };
+
+    const config = configs[proficiency];
+    const signMode = choice(config.signs);
+
+    // Only retry for pAbs === qAbs — maxFactor ceiling is guaranteed by
+    // buildFromPrimes in utils.js. Safety fallback for the degenerate case.
+    let pAbs, qAbs;
+    let attempts = 0;
+    do {
+      pAbs = buildFromPrimes(config.pool, config.maxPrimeCount, config.maxFactor);
+      qAbs = buildFromPrimes(config.pool, config.maxPrimeCount, config.maxFactor);
+      attempts++;
+      if (attempts > 50) { pAbs = 2; qAbs = 3; break; }
+    } while (pAbs === qAbs);
+
+    // Apply signs — for mixed, randomly decide which factor is negative so
+    // b can be either positive or negative, forcing students to read the sign carefully
+    let p, q;
+    if (signMode === 'both-positive') {
+      p = pAbs;
+      q = qAbs;
+    } else if (signMode === 'both-negative') {
+      p = -pAbs;
+      q = -qAbs;
+    } else {
+      // mixed: larger absolute value randomly positive or negative
+      const larger  =  Math.max(pAbs, qAbs);
+      const smaller =  Math.min(pAbs, qAbs);
+      const sign    = choice([1, -1]);
+      p = sign * larger;
+      q = -sign * smaller;
+    }
+
+    const b = p + q;   // coefficient of x
+    const c = p * q;   // constant term
+
+    // --- Build expression ---
+    const expression = formatPolynomial([
+      { coefficient: 1, exponent: 2 },
+      { coefficient: b, exponent: 1 },
+      { coefficient: c, exponent: 0 }
+    ]);
+
+    // --- Factored form ---
+    // Sort factors for canonical display: larger absolute value first
+    const [f1, f2] = [p, q].sort((a, b) => Math.abs(b) - Math.abs(a));
+    const answer = `(${formatLinearFactor(f1)})(${formatLinearFactor(f2)})`;
+
+    // --- Expected inputs ---
+    // For the "find two factors" step, student enters p and q as a comma-separated
+    // pair. We normalize by sorting numerically before comparing.
+    const factorPairSorted = [p, q].slice().sort((a, b) => a - b).join(', ');
+
+    // --- Hints ---
+    const coeffHint  = `Look at the term with x. What number is multiplied by x?`;
+    const constHint  = `Look at the last term. What is the number with no variable?`;
+    const cSign      = c >= 0 ? 'positive' : 'negative';
+    const findHint   = `You need two integers that multiply to ${c} and add to ${b}. ` +
+      `Think about factor pairs of ${Math.abs(c)}.` +
+      (c > 0 ? ` Since the product is positive, both integers have the same sign.` : '') +
+      (c < 0 ? ` Since the product is negative, the integers have opposite signs.` : '');
+    const finalHint  = `Use your two integers as the constants in each factor. ` +
+      `Remember: (x + negative number) writes as (x − positive number).`;
+
+    // --- Workflow ---
+    const workflow = [
+      {
+        id: 'identify-b',
+        label: 'Identify the coefficient of x',
+        hint: coeffHint,
+        expected: String(b)
+      },
+      {
+        id: 'identify-c',
+        label: 'Identify the constant term',
+        hint: constHint,
+        expected: String(c)
+      },
+      {
+        id: 'find-factors',
+        label: 'Find two integers: product = constant term, sum = coefficient of x',
+        hint: findHint,
+        expected: factorPairSorted,
+        inputType: 'pair'   // signals renderer to expect comma-separated input
+      },
+      {
+        id: 'final',
+        label: 'Write the factored form',
+        hint: finalHint,
+        expected: answer
+      }
+    ];
+
+    // --- Steps ---
+    const steps = [
+      {
+        expression,
+        rule: 'st',
+        output: answer,
+        explanation: `Find p, q where p × q = ${c} and p + q = ${b}: p = ${p}, q = ${q}. So (${formatLinearFactor(f1)})(${formatLinearFactor(f2)}).`
+      }
+    ];
+
+    return {
+      id: `st-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      method: 'st',
+      proficiency,
+      expression,
+      factors: [formatLinearFactor(f1), formatLinearFactor(f2)],
+      answer,
+      steps,
+      workflow
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // generateProblem(settings)
   // ---------------------------------------------------------------------------
@@ -598,6 +789,9 @@ window.Generators = (() => {
     }
     if (settings.method === 'pst') {
       return generatePerfectSquareTrinomialProblem(settings.difficulty);
+    }
+    if (settings.method === 'st') {
+      return generateSimpleTrinomialProblem(settings.difficulty);
     }
     return null;
   }
