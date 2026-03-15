@@ -240,6 +240,26 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--key-variable);
 }
 
+.pair-input-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pair-field {
+  text-align: center;
+}
+
+.pair-field.correct {
+  border-color: var(--correct);
+  background: color-mix(in srgb, var(--correct) 8%, transparent);
+}
+
+.pair-field.incorrect {
+  border-color: var(--incorrect);
+  background: color-mix(in srgb, var(--incorrect) 8%, transparent);
+}
+
 .hint-list {
   display: grid;
   gap: 6px;

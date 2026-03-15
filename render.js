@@ -78,20 +78,51 @@ window.Renderer = (() => {
       label.className = 'step-label';
       label.textContent = step.label;
 
-      const display = document.createElement('div');
-      const classes = ['input-display'];
-      if (state.activeInputId === step.id) classes.push('active');
-      if (!record.display) classes.push('placeholder');
-      display.className = classes.join(' ');
-      if (record.display) {
-        display.innerHTML = rawToPrettyHtml(record.display);
-      } else {
-        display.textContent = 'Tap here to type';
-      }
-      display.addEventListener('click', () => selectInput(state, step.id, render));
+      // Pair steps get two side-by-side input fields, each independently focusable
+      if (step.inputType === 'pair') {
+        const pairWrap = document.createElement('div');
+        pairWrap.className = 'pair-input-wrap';
 
-      item.appendChild(label);
-      item.appendChild(display);
+        ['a', 'b'].forEach((slot) => {
+          const subId = `${step.id}-${slot}`;
+          ensureInputRecord(state, subId);
+          const subRecord = state.inputValues[subId];
+          const subStatus = state.pairFieldStatuses?.[subId];
+
+          const field = document.createElement('div');
+          const classes = ['input-display', 'pair-field'];
+          if (state.activeInputId === subId) classes.push('active');
+          if (!subRecord.display) classes.push('placeholder');
+          if (subStatus === 'correct')   classes.push('correct');
+          if (subStatus === 'incorrect') classes.push('incorrect');
+          field.className = classes.join(' ');
+          if (subRecord.display) {
+            field.innerHTML = rawToPrettyHtml(subRecord.display);
+          } else {
+            field.textContent = slot === 'a' ? 'First' : 'Second';
+          }
+          field.addEventListener('click', () => selectInput(state, subId, render));
+          pairWrap.appendChild(field);
+        });
+
+        item.appendChild(label);
+        item.appendChild(pairWrap);
+      } else {
+        const display = document.createElement('div');
+        const classes = ['input-display'];
+        if (state.activeInputId === step.id) classes.push('active');
+        if (!record.display) classes.push('placeholder');
+        display.className = classes.join(' ');
+        if (record.display) {
+          display.innerHTML = rawToPrettyHtml(record.display);
+        } else {
+          display.textContent = 'Tap here to type';
+        }
+        display.addEventListener('click', () => selectInput(state, step.id, render));
+
+        item.appendChild(label);
+        item.appendChild(display);
+      }
 
       // Inline hint, shown only after student requests it
       if (state.revealedHints?.[step.id]) {
@@ -132,9 +163,13 @@ window.Renderer = (() => {
       elements.keypadStatus.textContent = 'Tap an answer field, then use the keypad.';
       return;
     }
+    // Friendly label for pair sub-fields
+    let label = state.activeInputId;
+    if (state.activeInputId.endsWith('-a')) label = 'first number';
+    if (state.activeInputId.endsWith('-b')) label = 'second number';
     elements.keypadStatus.textContent = state.exponentMode
       ? 'Exponent mode is on: tap one digit to add an exponent.'
-      : `Typing into: ${state.activeInputId}`;
+      : `Typing into: ${label}`;
   }
 
   function renderStepsOutput(state, elements) {

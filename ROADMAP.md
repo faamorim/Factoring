@@ -89,7 +89,27 @@ deliberately deferred and why.
   steps from those known roots. Not a general solver — still works
   forwards from known answers. Fits naturally into existing architecture.
 
-- **Progress tracking** — count of correct/incorrect per method and
+- **Incremental hints** — each workflow step gets `hints: [hint1, hint2, hint3]`
+  instead of a single `hint` string. Each press of the Hint button reveals
+  the next level for the current step — progressively stronger nudges without
+  giving away the answer. First hint: general direction. Second: more specific.
+  Third: nearly explicit. Existing single `hint` strings stay supported as
+  fallback for steps that don't need multiple levels. The find-factors step
+  in Simple Trinomial is the natural first candidate: hint1 = "think about
+  factor pairs", hint2 = sign conclusion (both negative / opposite signs),
+  hint3 = "try the pair — does it multiply and add correctly?"
+
+- **Incremental hints** — instead of one hint per step, provide a
+  sequence of progressively stronger hints (hint1, hint2, hint3).
+  Each press of the Hint button reveals the next level — nudging
+  the student closer to the answer without giving it away outright.
+  First hint might point to the concept, second gives a concrete
+  starting point, third is nearly the answer. The find-factors step
+  in Simple Trinomial is a natural candidate: hint1 could be "think
+  about factor pairs of |c|", hint2 adds sign guidance, hint3 gives
+  one of the two factors explicitly.
+
+ — count of correct/incorrect per method and
   proficiency level, stored in localStorage. Simple session stats.
 
 - **Timer mode** — optional countdown or elapsed time display.

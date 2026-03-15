@@ -29,6 +29,7 @@
     lastGenerationParams: null,
     revealedSteps: 0,
     stepStatuses: {},
+    pairFieldStatuses: {},
     revealedHints: {}
   };
 
@@ -72,6 +73,7 @@
     state.exponentMode = false;
     state.revealedSteps = 0;
     state.stepStatuses = {};
+    state.pairFieldStatuses = {};
     state.revealedHints = {};
     setFeedback('New problem generated.', 'info');
     render();
@@ -137,12 +139,49 @@
     }, 400);
   }
 
+  // Check a pair step — each field is matched against the expected set greedily.
+  // Once a value is matched it is consumed, preventing double-matching (e.g. 4,4 vs 4,7).
+  // Returns { stepCorrect, fieldStatuses: { 'id-a': 'correct'|'incorrect'|'empty', ... } }
+  function checkPairStep(step) {
+    const rawA = state.inputValues[`${step.id}-a`]?.raw?.trim() || '';
+    const rawB = state.inputValues[`${step.id}-b`]?.raw?.trim() || '';
+
+    // Parse expected as two sorted integers e.g. "-5, 7" → [-5, 7]
+    const expectedValues = step.expected.split(',').map(s => parseInt(s.trim(), 10));
+    const remaining = [...expectedValues];
+
+    const fieldStatuses = {};
+    for (const [slot, raw] of [['a', rawA], ['b', rawB]]) {
+      const subId = `${step.id}-${slot}`;
+      if (!raw) { fieldStatuses[subId] = 'empty'; continue; }
+      const val = parseInt(raw, 10);
+      const idx = remaining.indexOf(val);
+      if (idx !== -1) {
+        fieldStatuses[subId] = 'correct';
+        remaining.splice(idx, 1); // consume matched value
+      } else {
+        fieldStatuses[subId] = 'incorrect';
+      }
+    }
+
+    const stepCorrect = fieldStatuses[`${step.id}-a`] === 'correct' &&
+                        fieldStatuses[`${step.id}-b`] === 'correct';
+    const stepFilled  = rawA !== '' && rawB !== '';
+
+    return { stepCorrect, stepFilled, fieldStatuses };
+  }
+
   function evaluateGuidedSteps(revealHint) {
     const workflow = state.currentProblem.workflow;
     let firstWrongIndex = -1;
 
     // Pass 1: find the first filled+wrong step
     workflow.forEach((step, index) => {
+      if (step.inputType === 'pair') {
+        const { stepCorrect, stepFilled } = checkPairStep(step);
+        if (stepFilled && !stepCorrect && firstWrongIndex === -1) firstWrongIndex = index;
+        return;
+      }
       const raw = state.inputValues[step.id]?.raw || '';
       if (raw.trim() !== '' && !compareAnswers(raw, step.expected)) {
         if (firstWrongIndex === -1) firstWrongIndex = index;
@@ -151,6 +190,22 @@
 
     // Pass 2: assign statuses
     workflow.forEach((step, index) => {
+      if (step.inputType === 'pair') {
+        const { stepCorrect, stepFilled, fieldStatuses } = checkPairStep(step);
+        Object.assign(state.pairFieldStatuses, fieldStatuses);
+        if (!stepFilled) {
+          state.stepStatuses[step.id] = 'empty';
+        } else if (firstWrongIndex === -1 || index < firstWrongIndex) {
+          state.stepStatuses[step.id] = stepCorrect ? 'correct' : 'incorrect';
+          if (!stepCorrect && firstWrongIndex === -1) firstWrongIndex = index;
+        } else if (index === firstWrongIndex) {
+          state.stepStatuses[step.id] = 'incorrect';
+        } else {
+          state.stepStatuses[step.id] = 'downstream';
+        }
+        return;
+      }
+
       const raw = state.inputValues[step.id]?.raw || '';
       const filled = raw.trim() !== '';
 
@@ -160,14 +215,12 @@
       }
 
       if (firstWrongIndex === -1) {
-        // No wrong steps — everything filled is correct
         state.stepStatuses[step.id] = 'correct';
       } else if (index < firstWrongIndex) {
         state.stepStatuses[step.id] = 'correct';
       } else if (index === firstWrongIndex) {
         state.stepStatuses[step.id] = 'incorrect';
       } else {
-        // Filled steps after the first wrong one are downstream casualties
         state.stepStatuses[step.id] = 'downstream';
       }
     });
@@ -261,16 +314,26 @@
       return;
     }
 
-    const nextStep = state.currentProblem.workflow.find((step) => !(state.inputValues[step.id]?.raw));
+    const nextStep = state.currentProblem.workflow.find((step) => {
+      if (step.inputType === 'pair') {
+        return !(state.inputValues[`${step.id}-a`]?.raw) || !(state.inputValues[`${step.id}-b`]?.raw);
+      }
+      return !(state.inputValues[step.id]?.raw);
+    });
     if (!nextStep) {
       setFeedback('All guided fields are already filled.', 'info');
       return;
     }
 
-    state.inputValues[nextStep.id] = {
-      raw: nextStep.expected,
-      display: rawToPretty(nextStep.expected)
-    };
+    if (nextStep.inputType === 'pair') {
+      const [valA, valB] = nextStep.expected.split(',').map(s => s.trim());
+      state.inputValues[`${nextStep.id}-a`] = { raw: valA, display: rawToPretty(valA) };
+      state.inputValues[`${nextStep.id}-b`] = { raw: valB, display: rawToPretty(valB) };
+      state.pairFieldStatuses[`${nextStep.id}-a`] = 'correct';
+      state.pairFieldStatuses[`${nextStep.id}-b`] = 'correct';
+    } else {
+      state.inputValues[nextStep.id] = { raw: nextStep.expected, display: rawToPretty(nextStep.expected) };
+    }
     state.stepStatuses[nextStep.id] = 'correct';
     render();
     setFeedback(`Filled: ${nextStep.label}.`, 'info');
@@ -283,10 +346,15 @@
     }
 
     state.currentProblem.workflow.forEach((step) => {
-      state.inputValues[step.id] = {
-        raw: step.expected,
-        display: rawToPretty(step.expected)
-      };
+      if (step.inputType === 'pair') {
+        const [valA, valB] = step.expected.split(',').map(s => s.trim());
+        state.inputValues[`${step.id}-a`] = { raw: valA, display: rawToPretty(valA) };
+        state.inputValues[`${step.id}-b`] = { raw: valB, display: rawToPretty(valB) };
+        state.pairFieldStatuses[`${step.id}-a`] = 'correct';
+        state.pairFieldStatuses[`${step.id}-b`] = 'correct';
+      } else {
+        state.inputValues[step.id] = { raw: step.expected, display: rawToPretty(step.expected) };
+      }
       state.stepStatuses[step.id] = 'correct';
     });
 

@@ -721,8 +721,9 @@ window.Generators = (() => {
     const cSign      = c >= 0 ? 'positive' : 'negative';
     const findHint   = `You need two integers that multiply to ${c} and add to ${b}. ` +
       `Think about factor pairs of ${Math.abs(c)}.` +
-      (c > 0 ? ` Since the product is positive, both integers have the same sign.` : '') +
-      (c < 0 ? ` Since the product is negative, the integers have opposite signs.` : '');
+      (c > 0 && b > 0 ? ` Since the product is positive and the sum is positive, both integers are positive.` : '') +
+      (c > 0 && b < 0 ? ` Since the product is positive and the sum is negative, both integers are negative.` : '') +
+      (c < 0 ? ` Since the product is negative, the integers have opposite signs. The one with the larger absolute value has the same sign as the sum (${b > 0 ? 'positive' : 'negative'}).` : '');
     const finalHint  = `Use your two integers as the constants in each factor. ` +
       `Remember: (x + negative number) writes as (x − positive number).`;
 
