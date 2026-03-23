@@ -528,15 +528,26 @@ window.Generators = (() => {
       return midCoeff >= 0 ? `${absCoeff}${varPart}` : `-${absCoeff}${varPart}`;
     })();
 
+    // expectedMiddleAbs: the positive magnitude for the verify step
+    // expectedMiddle: signed, kept for the steps explanation
+    const expectedMiddleAbs = (() => {
+      const absCoeff = Math.abs(midCoeff);
+      const varPart  = useY
+        ? (midExponent === 1 ? 'xy' : `x^${midExponent}y`)
+        : (midExponent === 1 ? 'x'  : `x^${midExponent}`);
+      return `${absCoeff}${varPart}`;
+    })();
+
+    const middleSign = midCoeff >= 0 ? '+' : '-';
+
     // --- Hints ---
-    const firstRootHint = `The first term is ${firstTermDesc}. What is √(${firstTermDesc})?`;
-    const lastRootHint  = useY
-      ? `The last term is ${lastTermDesc}. What is √(${lastTermDesc})?`
-      : `The last term is ${constCoeff}. What is √${constCoeff}?`;
-    const verifyHint    = `Multiply 2 × (first root) × (last root): 2 × ${aRootText} × ${bRootText}. Does that match the middle term (${middleTermDesc})?`;
-    const finalHint     = bRoot >= 0
-      ? `Write (first_root + last_root)² where first_root = ${aRootText} and last_root = ${bRootText}.`
-      : `Write (first_root − last_root)² where first_root = ${aRootText} and last_root = ${bRootText}.`;
+    const firstRootHint   = `The first term is ${firstTermDesc}. What is √(${firstTermDesc})?`;
+    const lastRootHint    = useY
+      ? `The last term is ${lastTermDesc}. Square roots are always positive — what is √(${lastTermDesc})?`
+      : `The last term is ${constCoeff}. Square roots are always positive — what is √${constCoeff}?`;
+    const verifyHint      = `Multiply 2 × first_root × last_root: 2 × ${aRootText} × ${bRootText}. Enter the result as a positive value — we check the sign separately.`;
+    const signHint        = `Look at the middle term of the original expression (${middleTermDesc}). Is it positive or negative? Enter + or −.`;
+    const finalHint       = `Use the sign from the previous step. Write (first_root ± last_root)² with the correct sign between the roots.`;
 
     // --- Workflow ---
     const workflow = [
@@ -548,19 +559,25 @@ window.Generators = (() => {
       },
       {
         id: 'last-root',
-        label: 'Find the square root of the last term',
+        label: 'Find the square root of the last term (always positive)',
         hint: lastRootHint,
         expected: bRootText
       },
       {
         id: 'verify-middle',
-        label: `Verify: middle term = 2 × first_root × last_root`,
+        label: 'Verify: 2 × first_root × last_root matches the middle term (ignore its sign)',
         hint: verifyHint,
-        expected: expectedMiddle
+        expected: expectedMiddleAbs
+      },
+      {
+        id: 'middle-sign',
+        label: 'What is the sign of the middle term?',
+        hint: signHint,
+        expected: middleSign
       },
       {
         id: 'final',
-        label: `Write the factored form (first_root ${bSign} last_root)²`,
+        label: 'Write the factored form (first_root ± last_root)²',
         hint: finalHint,
         expected: answer
       }

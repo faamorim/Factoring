@@ -147,12 +147,6 @@ window.Renderer = (() => {
       button.textContent = buttonInfo.label;
       if (buttonInfo.className) button.className = buttonInfo.className;
       if (buttonInfo.disabled) { button.disabled = true; return elements.keypadGrid.appendChild(button); }
-      if (buttonInfo.value === 'exp' && state.exponentMode) button.classList.add('active');
-
-      const isDigit = /^[0-9]$/.test(buttonInfo.value);
-      const allowedInExponentMode = isDigit || buttonInfo.value === 'backspace' || buttonInfo.value === 'clear';
-      if (state.exponentMode && !allowedInExponentMode) button.disabled = true;
-
       button.addEventListener('click', () => onPress(buttonInfo.value));
       elements.keypadGrid.appendChild(button);
     });
@@ -167,9 +161,7 @@ window.Renderer = (() => {
     let label = state.activeInputId;
     if (state.activeInputId.endsWith('-a')) label = 'first number';
     if (state.activeInputId.endsWith('-b')) label = 'second number';
-    elements.keypadStatus.textContent = state.exponentMode
-      ? 'Exponent mode is on: tap one digit to add an exponent.'
-      : `Typing into: ${label}`;
+    elements.keypadStatus.textContent = `Typing into: ${label}`;
   }
 
   function renderStepsOutput(state, elements) {

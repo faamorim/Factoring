@@ -240,6 +240,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--key-variable);
 }
 
+.exp-placeholder {
+  color: var(--muted);
+  animation: exp-blink 1s step-start infinite;
+}
+
+@keyframes exp-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
 .pair-input-wrap {
   display: grid;
   grid-template-columns: 1fr 1fr;

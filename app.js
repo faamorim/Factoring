@@ -20,7 +20,6 @@
     currentProblem: null,
     activeInputId: null,
     inputValues: {},
-    exponentMode: false,
     feedback: {
       message: 'Generate a problem to start.',
       type: 'info'
@@ -70,7 +69,6 @@
     clearSeed();
     state.inputValues = {};
     state.activeInputId = null;
-    state.exponentMode = false;
     state.revealedSteps = 0;
     state.stepStatuses = {};
     state.pairFieldStatuses = {};
@@ -393,7 +391,6 @@
   elements.modeSelect.addEventListener('change', (event) => {
     state.settings.mode = event.target.value;
     state.activeInputId = null;
-    state.exponentMode = false;
     render();
   });
 

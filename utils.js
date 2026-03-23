@@ -89,11 +89,14 @@ window.Utils = (() => {
 
   function rawToPretty(raw) {
     return raw
-      .replace(/\^([0-9])/g, (_, digit) => superscriptMap[digit] || `^${digit}`)
+      .replace(/\^([0-9]+)/g, (_, digits) => [...digits].map(d => superscriptMap[d] || d).join(''))
+      .replace(/\^$/g, '\u2070')   // bare caret → ⁰ placeholder (same font metrics as ²³⁴)
       .replace(/-/g, '−');
   }
 
   // Like rawToPretty but returns safe HTML with variables wrapped in styled spans.
+  // Also wraps the exponent placeholder □ in a blink-styled span so students
+  // can see where their exponent digit will go.
   // Use this for innerHTML display fields only — not for plain text contexts.
   function rawToPrettyHtml(raw) {
     const pretty = rawToPretty(raw);
@@ -105,7 +108,11 @@ window.Utils = (() => {
     // Wrap x and y in math-variable spans — only when not adjacent to non-math letters.
     // Excludes x/y inside words like "Multiply", "exponent", "every" etc.
     // Allows xy compound variables and standalone x/y next to digits/operators.
-    return escaped.replace(/(?<![a-wzA-WZ])[xy](?![a-wzA-WZ])/g, (match) => `<span class="math-var">${match}</span>`);
+    const withVars = escaped.replace(/(?<![a-wzA-WZ])[xy](?![a-wzA-WZ])/g, (match) => `<span class="math-var">${match}</span>`);
+    // Wrap the ⁰ placeholder in a blink span. No alignment CSS needed —
+    // ⁰ is a real Unicode superscript character with the same font metrics
+    // and baseline position as ²³⁴ etc.
+    return withVars.replace(/\u2070/g, '<span class="exp-placeholder">⁰</span>');
   }
 
   function normalizeRaw(raw) {

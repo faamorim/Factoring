@@ -20,7 +20,7 @@ window.InputController = (() => {
     { label: '0',    value: '0' },
     { label: 'x',    value: 'x',       className: 'key-variable' },
     { label: 'y',    value: 'y',       className: 'key-variable' },
-    { label: 'exp',  value: 'exp',     className: 'key-exp' },
+    { label: 'exp',  value: '^',       className: 'key-exp' },
     { label: '',     value: '',        className: 'key-spacer', disabled: true }
   ];
 
@@ -35,8 +35,19 @@ window.InputController = (() => {
     state.inputValues[id].display = rawToPretty(state.inputValues[id].raw);
   }
 
-  function canUseExponentAfter(raw) {
-    return /[xy]$/.test(raw);
+  // Returns true if a caret (^) can be inserted at the end of raw.
+  // Valid after: a variable (x, y), a closing parenthesis, or a digit
+  // (to allow things like 2^3 even if unusual in our context).
+  function canInsertCaret(raw) {
+    return /[xy0-9)]$/.test(raw);
+  }
+
+  // Returns true if raw ends with a bare caret with no digit yet entered.
+  // In this state only digits are valid — anything else is blocked.
+  // Once a digit follows the caret the exponent is open; subsequent
+  // non-digits naturally end it and are appended normally.
+  function afterBareCaret(raw) {
+    return raw.endsWith('^');
   }
 
   function selectInput(state, id, render) {
@@ -57,40 +68,35 @@ window.InputController = (() => {
 
     if (value === 'clear') {
       record.raw = '';
-      state.exponentMode = false;
       syncDisplay(state, state.activeInputId);
       render();
       return;
     }
 
     if (value === 'backspace') {
-      if (/\^[0-9]$/.test(record.raw)) {
-        record.raw = record.raw.slice(0, -2);
-      } else {
-        record.raw = record.raw.slice(0, -1);
-      }
-      state.exponentMode = false;
+      record.raw = record.raw.slice(0, -1);
       syncDisplay(state, state.activeInputId);
       render();
       return;
     }
 
-    if (value === 'exp') {
-      if (!canUseExponentAfter(record.raw)) {
-        setFeedback('Exponent can only be added right after a variable.', 'error');
+    // Caret: only allowed after x, y, digit, or closing parenthesis
+    if (value === '^') {
+      if (!canInsertCaret(record.raw)) {
+        setFeedback('Exponent can only follow a variable, digit, or closing parenthesis.', 'error');
         return;
       }
-      state.exponentMode = !state.exponentMode;
+      // Prevent double caret
+      if (record.raw.endsWith('^')) return;
+      record.raw += '^';
+      syncDisplay(state, state.activeInputId);
       render();
       return;
     }
 
-    if (state.exponentMode) {
-      if (!/^[0-9]$/.test(value)) return;
-      record.raw += `^${value}`;
-      state.exponentMode = false;
-      syncDisplay(state, state.activeInputId);
-      render();
+    // Prevent non-digit immediately after a bare ^ (no digit entered yet)
+    if (afterBareCaret(record.raw) && !/^[0-9]$/.test(value)) {
+      setFeedback('Enter a digit for the exponent first.', 'error');
       return;
     }
 
