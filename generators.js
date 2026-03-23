@@ -778,6 +778,188 @@ window.Generators = (() => {
     };
   }
 
+
+  // ---------------------------------------------------------------------------
+  // generateGroupingLayer (FUTURE)
+  //
+  // When Full Factoring is built, this generator should be split into:
+  //   generateGroupingLayer({ linearFactor, secondFactor, expression, terms })
+  //     → accepts pre-chosen factors from an external caller (e.g. Full Factoring)
+  //     → returns { groupingWorkflow, groupingSteps, answer }
+  //
+  // This mirrors the generateGCFLayer pattern. The Full Factoring generator
+  // would pick its own binomials (e.g. a DoS factor + a linear factor), expand
+  // them, then call generateGroupingLayer() to get the workflow/hints/steps
+  // without re-generating the factors internally.
+  //
+  // For now, all logic lives inside generateGroupingProblem — refactor when
+  // Full Factoring is introduced.
+  // ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
+  // generateGroupingProblem(proficiency)
+  //
+  // Generates a four-term polynomial factorable by grouping:
+  //   bx³ + abx² + cx + ac  →  (x + a)(bx² + c)
+  //
+  // Built backwards from factors to guarantee clean integer grouping:
+  //   First pair GCF:  bx²  leaving (x + a)
+  //   Second pair GCF: c    leaving (x + a)
+  //   Common binomial: (x + a)
+  //
+  // Constraints:
+  //   - gcd(b, c) = 1  so no overall GCF exists (pure grouping problem)
+  //   - gcd(a, c) = 1  so second pair GCF is exactly c, not a multiple
+  //   - b and c are never 1 at the same time (would be trivially simple)
+  //
+  // Proficiency levels:
+  //   emerging:   b=1, a and c small positive     e.g. x³ + 2x² + 3x + 6
+  //   developing: b=1, a or c can be negative     e.g. x³ − 3x² + 2x − 6
+  //   proficient: b>1, all positive               e.g. 2x³ + 6x² + 3x + 9
+  //   extending:  b>1, signs mixed, 50% two-variable  e.g. 3x³ − 6x² + 5x − 10
+  //                                                    or  3x² − 6xy + 5x − 10y
+  //
+  // Two-variable Extending: (x + a)(bx + cy) → bx² + cxy + abx + acy
+  //   First pair:  bx²  + abx  = bx(x + a)   GCF = bx
+  //   Second pair: cxy  + acy  = cy(x + a)    GCF = cy
+  //   Common binomial: (x + a) → (bx + cy)
+  // ---------------------------------------------------------------------------
+  function generateGroupingProblem(proficiency) {
+
+    const configs = {
+      emerging:   { bRange: [1, 1], aRange: [2, 6],  cRange: [2, 8],  allowNegativeA: false, allowNegativeC: false, allowY: false },
+      developing: { bRange: [1, 1], aRange: [2, 8],  cRange: [2, 8],  allowNegativeA: true,  allowNegativeC: true,  allowY: false },
+      proficient: { bRange: [2, 4], aRange: [2, 6],  cRange: [2, 8],  allowNegativeA: false, allowNegativeC: false, allowY: false },
+      extending:  { bRange: [2, 5], aRange: [2, 8],  cRange: [2, 10], allowNegativeA: true,  allowNegativeC: true,  allowY: true  }
+    };
+
+    const config = configs[proficiency];
+
+    // 50% chance of two-variable form at Extending: (x + a)(bx + cy)
+    const useY = config.allowY && choice([true, false]);
+
+    let a, b, c, attempts = 0;
+
+    do {
+      attempts++;
+      if (attempts > 200) { a = 2; b = 2; c = 3; break; }
+
+      b = randInt(config.bRange[0], config.bRange[1]);
+      a = randInt(config.aRange[0], config.aRange[1]) * (config.allowNegativeA ? choice([1, -1]) : 1);
+      c = randInt(config.cRange[0], config.cRange[1]) * (config.allowNegativeC ? choice([1, -1]) : 1);
+
+    } while (
+      gcdList([Math.abs(b), Math.abs(c)]) !== 1 ||   // no overall GCF
+      gcdList([Math.abs(a), Math.abs(c)]) !== 1 ||   // second pair GCF is exactly c (or cy)
+      (b === 1 && Math.abs(c) === 1)                 // avoid trivially simple
+    );
+
+    // --- Build the four terms ---
+    // Single-variable: bx³ + abx² + cx + ac     → (x + a)(bx² + c)
+    //   t1=bx³  t2=abx²  t3=cx   t4=ac
+    // Two-variable:   bx² + abx + cxy + acy     → (x + a)(bx + cy)
+    //   t1=bx²  t2=abx   t3=cxy  t4=acy
+    let t1, t2, t3, t4;
+    if (useY) {
+      t1 = { coefficient: b,     exponent: 2, yExponent: 0 };
+      t2 = { coefficient: a * b, exponent: 1, yExponent: 0 };
+      t3 = { coefficient: c,     exponent: 1, yExponent: 1 };
+      t4 = { coefficient: a * c, exponent: 0, yExponent: 1 };
+    } else {
+      t1 = { coefficient: b,     exponent: 3 };
+      t2 = { coefficient: a * b, exponent: 2 };
+      t3 = { coefficient: c,     exponent: 1 };
+      t4 = { coefficient: a * c, exponent: 0 };
+    }
+
+    const expression = formatPolynomial([t1, t2, t3, t4]);
+
+    // --- Factor pieces ---
+    const linearFactor = formatLinearFactor(a);   // common binomial: (x + a)
+
+    // Second factor: (bx² + c) single-variable or (bx + cy) two-variable
+    const secondFactor = useY
+      ? (c >= 0 ? `${b}x + ${c}y` : `${b}x - ${Math.abs(c)}y`)
+      : b === 1
+        ? (c >= 0 ? `x^2 + ${c}` : `x^2 - ${Math.abs(c)}`)
+        : (c >= 0 ? `${b}x^2 + ${c}` : `${b}x^2 - ${Math.abs(c)}`);
+
+    const answer = `(${linearFactor})(${secondFactor})`;
+
+    // --- First pair GCF ---
+    // Single: bx² from (bx³ + abx²)
+    // Two-var: bx  from (bx²  + abx)
+    const firstPairGCF    = useY ? (b === 1 ? 'x' : `${b}x`) : (b === 1 ? 'x^2' : `${b}x^2`);
+    const firstPairResult = `${firstPairGCF}(${linearFactor})`;
+
+    // --- Second pair GCF ---
+    // Single: c  from (cx + ac)
+    // Two-var: cy from (cxy + acy)
+    const cAbs = Math.abs(c);
+    const secondPairGCF    = useY
+      ? (c >= 0 ? `${cAbs}y` : `-${cAbs}y`)
+      : (c >= 0 ? (cAbs === 1 ? '1' : String(cAbs)) : `-${cAbs}`);
+    const secondPairResult = `${secondPairGCF}(${linearFactor})`;
+
+    // --- Hints ---
+    const firstPairTerms  = formatPolynomial([t1, t2]);
+    const secondPairTerms = formatPolynomial([t3, t4]);
+
+    const hint1 = `The first two terms are ${firstPairTerms}. Factor out their GCF and write the full result in the form GCF(binomial).`;
+    const hint2 = `The last two terms are ${secondPairTerms}. Factor out their GCF and write the full result in the form GCF(binomial). The binomial inside must match the one from the first pair.`;
+    const hint3 = `Both pairs share a common binomial factor. Look at what's inside the parentheses in each pair — what binomial appears in both?`;
+    const hint4 = `Write the common binomial (${linearFactor}) times the remaining factor (${secondFactor}).`;
+
+    // --- Workflow ---
+    const workflow = [
+      {
+        id: 'first-pair-gcf',
+        label: 'Factor the GCF from the first two terms — write as GCF(binomial)',
+        hint: hint1,
+        expected: firstPairResult
+      },
+      {
+        id: 'second-pair-gcf',
+        label: 'Factor the GCF from the last two terms — write as GCF(binomial)',
+        hint: hint2,
+        expected: secondPairResult
+      },
+      {
+        id: 'common-binomial',
+        label: 'Identify the common binomial factor',
+        hint: hint3,
+        expected: linearFactor
+      },
+      {
+        id: 'final',
+        label: 'Write the factored form',
+        hint: hint4,
+        expected: answer
+      }
+    ];
+
+    // --- Steps ---
+    const steps = [
+      {
+        expression,
+        rule: 'grouping',
+        output: answer,
+        explanation: `Group: (${firstPairTerms}) + (${secondPairTerms}) → ${firstPairResult} + ${secondPairResult} → ${answer}`
+      }
+    ];
+
+    return {
+      id: `grp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      method: 'grouping',
+      proficiency,
+      expression,
+      factors: [linearFactor, secondFactor],
+      answer,
+      steps,
+      workflow
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // generateProblem(settings)
   // ---------------------------------------------------------------------------
@@ -793,6 +975,9 @@ window.Generators = (() => {
     }
     if (settings.method === 'st') {
       return generateSimpleTrinomialProblem(settings.difficulty);
+    }
+    if (settings.method === 'grouping') {
+      return generateGroupingProblem(settings.difficulty);
     }
     return null;
   }
