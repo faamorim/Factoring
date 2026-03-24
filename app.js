@@ -223,7 +223,15 @@
       }
     });
 
-    const blankSteps = workflow.filter((step) => !(state.inputValues[step.id]?.raw?.trim()));
+    const blankSteps = workflow.filter((step) => {
+      if (step.inputType === 'pair') {
+        // Pair steps are blank only if both sub-fields are empty
+        const rawA = state.inputValues[`${step.id}-a`]?.raw?.trim();
+        const rawB = state.inputValues[`${step.id}-b`]?.raw?.trim();
+        return !rawA && !rawB;
+      }
+      return !(state.inputValues[step.id]?.raw?.trim());
+    });
     const allFilled = blankSteps.length === 0;
 
     if (firstWrongIndex === -1 && allFilled) {

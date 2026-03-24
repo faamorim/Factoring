@@ -4,6 +4,7 @@ window.Generators = (() => {
     choice,
     formatFactorPiece,
     formatLinearFactor,
+    formatSecondFactor,
     formatPolynomial,
     gcdList,
     isLikelyIrreducibleQuadratic,
@@ -12,27 +13,43 @@ window.Generators = (() => {
   } = window.Utils;
 
   // ---------------------------------------------------------------------------
-  // generateGCFLayer({ coeffRange, xExpRange, yExpRange, expression, insideTerms })
+  // isValidGroupingFactors(a, b, c)
+  //
+  // Validates that the three values produce a clean grouping problem:
+  //   - gcd(b, c) = 1  — no overall GCF hiding in the full polynomial
+  //   - gcd(a, c) = 1  — second pair GCF is exactly c (or cy), not a multiple
+  //   - not (b=1 and |c|=1)  — avoids trivially simple problems
+  // ---------------------------------------------------------------------------
+  function isValidGroupingFactors(a, b, c) {
+    if (gcdList([Math.abs(b), Math.abs(c)]) !== 1) return false;
+    if (gcdList([Math.abs(a), Math.abs(c)]) !== 1) return false;
+    if (b === 1 && Math.abs(c) === 1) return false;
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // generateGCFLayer({ coeffRange, xExpRange, yExpRange, insideTerms })
   //
   // Shared primitive used by any problem that has a GCF step.
-  // Picks the GCF components from the given ranges, then builds and returns
-  // the complete workflow steps and hints for the GCF portion of a problem.
+  // Picks the GCF components from the given ranges, builds the full polynomial
+  // expression, and returns the complete workflow steps and hints for the GCF
+  // portion of a problem.
   //
   // The caller is responsible for:
   //   - Generating inside terms (no shared numeric, x, or y factor)
-  //   - Building the full polynomial by multiplying inside terms by the GCF
   //   - Appending the final workflow step (write the factored form)
   //
   // Parameters:
   //   coeffRange  [min, max]  range for the numeric GCF
   //   xExpRange   [min, max]  range for the x GCF exponent (0 = no x in GCF)
   //   yExpRange   [min, max]  range for the y GCF exponent (default [0,0])
-  //   expression              full polynomial string (for hints)
-  //   insideTerms             inside terms array (for hints and answer)
+  //   insideTerms             inside terms array (no shared GCF)
   //
   // Returns:
   //   numericGCF, xGCFExponent, yGCFExponent  — the GCF components
   //   totalGCF, variableGCFText               — formatted GCF strings
+  //   expression                              — the full polynomial string
+  //   fullTerms                               — terms structure for chaining into next layer
   //   insideExpression, answer                — formatted strings
   //   gcfSteps, gcfWorkflow                   — steps/workflow for GCF portion
   // ---------------------------------------------------------------------------
@@ -40,12 +57,22 @@ window.Generators = (() => {
     coeffRange,
     xExpRange,
     yExpRange = [0, 0],
-    expression,
     insideTerms
   }) {
     const numericGCF   = randInt(coeffRange[0], coeffRange[1]);
     const xGCFExponent = randInt(xExpRange[0], xExpRange[1]);
     const yGCFExponent = randInt(yExpRange[0], yExpRange[1]);
+
+    // Build the full polynomial by scaling inside terms by the GCF
+    const fullTerms = insideTerms
+      .map(t => ({
+        coefficient: numericGCF * t.coefficient,
+        exponent:    t.exponent + xGCFExponent,
+        yExponent:   (t.yExponent || 0) + yGCFExponent
+      }))
+      .sort((a, b) => b.exponent - a.exponent);
+
+    const expression = formatPolynomial(fullTerms);
 
     const xGCFPart = xGCFExponent === 0 ? '' : xGCFExponent === 1 ? 'x' : `x^${xGCFExponent}`;
     const yGCFPart = yGCFExponent === 0 ? '' : yGCFExponent === 1 ? 'y' : `y^${yGCFExponent}`;
@@ -56,13 +83,6 @@ window.Generators = (() => {
 
     const insideExpression = formatPolynomial(insideTerms);
     const answer = `${totalGCF}(${insideExpression})`;
-
-    // Reconstruct full terms for hint text
-    const fullTerms = insideTerms.map(t => ({
-      coefficient: numericGCF * t.coefficient,
-      exponent:    t.exponent + xGCFExponent,
-      yExponent:   (t.yExponent || 0) + yGCFExponent
-    }));
 
     const coefficients = fullTerms.map(t => Math.abs(t.coefficient));
     const numericHint = `What is the GCF of ${coefficients.join(', ')}?`;
@@ -133,6 +153,8 @@ window.Generators = (() => {
       yGCFExponent,
       variableGCFText,
       totalGCF,
+      expression,
+      fullTerms,       // raw terms structure — available for chaining into the next layer
       insideExpression,
       answer,
       gcfSteps,
@@ -264,34 +286,11 @@ window.Generators = (() => {
     const config = configs[proficiency];
     const insideTerms = generateInsideTerms(config.inside);
 
-    // First pass: get GCF components
-    const firstPass = generateGCFLayer({
+    // Single call — layer builds the expression internally
+    const layer = generateGCFLayer({
       coeffRange: config.coeffRange,
       xExpRange:  config.xExpRange,
       yExpRange:  config.yExpRange,
-      expression: '__placeholder__',
-      insideTerms
-    });
-
-    const { numericGCF, xGCFExponent, yGCFExponent } = firstPass;
-
-    // Build the real full polynomial
-    const fullTerms = insideTerms
-      .map(t => ({
-        coefficient: numericGCF * t.coefficient,
-        exponent:    t.exponent + xGCFExponent,
-        yExponent:   (t.yExponent || 0) + yGCFExponent
-      }))
-      .sort((a, b) => b.exponent - a.exponent);
-
-    const expression = formatPolynomial(fullTerms);
-
-    // Second pass: rebuild with real expression so hint text is accurate
-    const layer = generateGCFLayer({
-      coeffRange: [numericGCF, numericGCF],
-      xExpRange:  [xGCFExponent, xGCFExponent],
-      yExpRange:  [yGCFExponent, yGCFExponent],
-      expression,
       insideTerms
     });
 
@@ -305,7 +304,7 @@ window.Generators = (() => {
       id: `gcf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       method: 'gcf',
       proficiency,
-      expression,
+      expression: layer.expression,
       factors: [layer.totalGCF, layer.insideExpression],
       answer: layer.answer,
       steps: layer.gcfSteps,
@@ -712,106 +711,148 @@ window.Generators = (() => {
       q = -sign * smaller;
     }
 
-    const b = p + q;   // coefficient of x
-    const c = p * q;   // constant term
-
-    // --- Build expression ---
-    const expression = formatPolynomial([
-      { coefficient: 1, exponent: 2 },
-      { coefficient: b, exponent: 1 },
-      { coefficient: c, exponent: 0 }
-    ]);
-
-    // --- Factored form ---
-    // Sort factors for canonical display: larger absolute value first
-    const [f1, f2] = [p, q].sort((a, b) => Math.abs(b) - Math.abs(a));
-    const answer = `(${formatLinearFactor(f1)})(${formatLinearFactor(f2)})`;
-
-    // --- Expected inputs ---
-    // For the "find two factors" step, student enters p and q as a comma-separated
-    // pair. We normalize by sorting numerically before comparing.
-    const factorPairSorted = [p, q].slice().sort((a, b) => a - b).join(', ');
-
-    // --- Hints ---
-    const coeffHint  = `Look at the term with x. What number is multiplied by x?`;
-    const constHint  = `Look at the last term. What is the number with no variable?`;
-    const cSign      = c >= 0 ? 'positive' : 'negative';
-    const findHint   = `You need two integers that multiply to ${c} and add to ${b}. ` +
-      `Think about factor pairs of ${Math.abs(c)}.` +
-      (c > 0 && b > 0 ? ` Since the product is positive and the sum is positive, both integers are positive.` : '') +
-      (c > 0 && b < 0 ? ` Since the product is positive and the sum is negative, both integers are negative.` : '') +
-      (c < 0 ? ` Since the product is negative, the integers have opposite signs. The one with the larger absolute value has the same sign as the sum (${b > 0 ? 'positive' : 'negative'}).` : '');
-    const finalHint  = `Use your two integers as the constants in each factor. ` +
-      `Remember: (x + negative number) writes as (x − positive number).`;
-
-    // --- Workflow ---
-    const workflow = [
-      {
-        id: 'identify-b',
-        label: 'Identify the coefficient of x',
-        hint: coeffHint,
-        expected: String(b)
-      },
-      {
-        id: 'identify-c',
-        label: 'Identify the constant term',
-        hint: constHint,
-        expected: String(c)
-      },
-      {
-        id: 'find-factors',
-        label: 'Find two integers: product = constant term, sum = coefficient of x',
-        hint: findHint,
-        expected: factorPairSorted,
-        inputType: 'pair'   // signals renderer to expect comma-separated input
-      },
-      {
-        id: 'final',
-        label: 'Write the factored form',
-        hint: finalHint,
-        expected: answer
-      }
-    ];
-
-    // --- Steps ---
-    const steps = [
-      {
-        expression,
-        rule: 'st',
-        output: answer,
-        explanation: `Find p, q where p × q = ${c} and p + q = ${b}: p = ${p}, q = ${q}. So (${formatLinearFactor(f1)})(${formatLinearFactor(f2)}).`
-      }
-    ];
+    // Route through generateTrinomialLayer with pinned values.
+    // aRange=[1,1] and cRange=[1,1] keeps leading coefficient at 1 (simple trinomial).
+    // skipValidation=true because p,q are already validated above.
+    const layer = generateTrinomialLayer({
+      aRange: [1, 1], bRange: [p, p], allowNegativeB: false,
+      cRange: [1, 1], dRange: [q, q], allowNegativeD: false,
+      skipValidation: true
+    });
 
     return {
       id: `st-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       method: 'st',
       proficiency,
-      expression,
-      factors: [formatLinearFactor(f1), formatLinearFactor(f2)],
-      answer,
-      steps,
-      workflow
+      expression:   layer.expression,
+      factors:      [layer.factor1, layer.factor2],
+      answer:       layer.answer,
+      steps:        layer.steps,
+      workflow:     layer.workflow
     };
   }
 
 
   // ---------------------------------------------------------------------------
-  // generateGroupingLayer (FUTURE)
-  //
-  // When Full Factoring is built, this generator should be split into:
-  //   generateGroupingLayer({ linearFactor, secondFactor, expression, terms })
-  //     → accepts pre-chosen factors from an external caller (e.g. Full Factoring)
-  //     → returns { groupingWorkflow, groupingSteps, answer }
-  //
-  // This mirrors the generateGCFLayer pattern. The Full Factoring generator
-  // would pick its own binomials (e.g. a DoS factor + a linear factor), expand
-  // them, then call generateGroupingLayer() to get the workflow/hints/steps
-  // without re-generating the factors internally.
-  //
-  // For now, all logic lives inside generateGroupingProblem — refactor when
-  // Full Factoring is introduced.
   // ---------------------------------------------------------------------------
+  // generateGroupingLayer({ aRange, aXExponent, allowNegativeA,
+  //                         bRange, allowNegativeB,
+  //                         cRange, cXExponent,
+  //                         dRange, allowNegativeD, dYExponent })
+  //
+  // Unified grouping primitive for (ax+b)(cx^n+dy^m) → four-term polynomial.
+  // Covers standalone grouping AND the grouping step inside general trinomials.
+  //
+  // Expanded: (ax+b)(cx^n+dy^m)
+  //   = acx^(n+1) + bcx^n + adxy^m + bdy^m
+  //   First pair:  acx^(n+1) + bcx^n  →  cx^n(ax + b)
+  //   Second pair: adxy^m    + bdy^m  →  dy^m(ax + b)
+  //   Common binomial: (ax + b)
+  //
+  // GCFs are derived via gcd — no hardcoded assumptions about structure.
+  // Pass [v,v] ranges to pin exact values; [min,max] to randomise.
+  // aXExponent defaults to 1 (linear first factor — curriculum standard).
+  //
+  // Returns:
+  //   a, b, c, d        — raw factor values
+  //   factor1, factor2  — formatted factor strings
+  //   expression        — full four-term polynomial
+  //   terms             — [t1,t2,t3,t4] for chaining
+  //   answer, commonBinomial, firstPairResult, secondPairResult
+  //   groupingWorkflow, groupingSteps
+  // ---------------------------------------------------------------------------
+  function generateGroupingLayer({
+    aRange, aXExponent = 1, allowNegativeA = false,
+    bRange,                  allowNegativeB = false,
+    cRange, cXExponent = 2,
+    dRange,                  allowNegativeD = false, dYExponent = 0,
+    skipValidation = false   // set true when passing pinned values already known to be valid
+  }) {
+    // Generate a, b, c, d — retry until valid (skip when values are pinned externally)
+    let a, b, c, d, attempts = 0;
+    do {
+      attempts++;
+      if (attempts > 200) { a = 1; b = 2; c = 1; d = 3; break; }
+      a = randInt(aRange[0], aRange[1]) * (allowNegativeA ? choice([1, -1]) : 1);
+      b = randInt(bRange[0], bRange[1]) * (allowNegativeB ? choice([1, -1]) : 1);
+      c = randInt(cRange[0], cRange[1]);
+      d = randInt(dRange[0], dRange[1]) * (allowNegativeD ? choice([1, -1]) : 1);
+    } while (!skipValidation && (b === 0 || d === 0 || !isValidGroupingFactors(b, c, d)));
+
+    // Build four terms: (ax+b)(cx^n+dy^m)
+    // = acx^(n+aXExp) + bcx^n + adx^aXExp·y^dYExp + bd·y^dYExp
+    const t1 = { coefficient: a * c, exponent: cXExponent + aXExponent, yExponent: 0         };
+    const t2 = { coefficient: b * c, exponent: cXExponent,              yExponent: 0         };
+    const t3 = { coefficient: a * d, exponent: aXExponent,              yExponent: dYExponent };
+    const t4 = { coefficient: b * d, exponent: 0,                       yExponent: dYExponent };
+    const terms = [t1, t2, t3, t4];
+
+    const expression = formatPolynomial(terms);
+    const factor1    = formatSecondFactor(a, aXExponent, b, 0);
+    const factor2    = formatSecondFactor(c, cXExponent, d, dYExponent);
+    const answer     = `(${factor1})(${factor2})`;
+
+    // Derive first pair GCF: gcd(t1,t2) × x^cXExponent
+    const firstGCFNum  = gcdList([Math.abs(t1.coefficient), Math.abs(t2.coefficient)]);
+    const firstGCFText = firstGCFNum === 1
+      ? (cXExponent === 1 ? 'x' : `x^${cXExponent}`)
+      : (cXExponent === 1 ? `${firstGCFNum}x` : `${firstGCFNum}x^${cXExponent}`);
+
+    // Common binomial (ax+b) from first pair after factoring out firstGCF·x^cXExp
+    const cbA = t1.coefficient / firstGCFNum;
+    const cbB = t2.coefficient / firstGCFNum;
+    const commonBinomial  = formatSecondFactor(cbA, aXExponent, cbB, 0);
+    const firstPairResult = `${firstGCFText}(${commonBinomial})`;
+
+    // Derive second pair GCF: gcd(t3,t4) with y component, sign chosen to match binomial
+    const secondGCFNum = gcdList([Math.abs(t3.coefficient), Math.abs(t4.coefficient)]);
+    const testA = t3.coefficient / secondGCFNum;
+    const testB = t4.coefficient / secondGCFNum;
+    const secondGCFCoeff = (testA === cbA && testB === cbB) ? secondGCFNum : -secondGCFNum;
+    const secondGCFAbs   = Math.abs(secondGCFCoeff);
+    const dYPart = dYExponent === 0 ? '' : dYExponent === 1 ? 'y' : `y^${dYExponent}`;
+    const secondGCFText  = secondGCFCoeff >= 0
+      ? (secondGCFAbs === 1 && !dYPart ? '1' : `${secondGCFAbs === 1 ? '' : secondGCFAbs}${dYPart}`)
+      : `-${secondGCFAbs === 1 ? '' : secondGCFAbs}${dYPart}`;
+    const secondPairResult = `${secondGCFText}(${commonBinomial})`;
+
+    // Hints — single source of truth for all grouping problems
+    const firstPairTerms  = formatPolynomial([t1, t2]);
+    const secondPairTerms = formatPolynomial([t3, t4]);
+    const hint1 = `The first two terms are ${firstPairTerms}. Factor out their GCF and write the full result in the form GCF(binomial).`;
+    const hint2 = `The last two terms are ${secondPairTerms}. Factor out their GCF and write the full result in the form GCF(binomial). The binomial inside must match the first pair's binomial.`;
+    const hint3 = `Both pairs share a common binomial factor. Look at what's inside the parentheses — what binomial appears in both?`;
+    const hint4 = `Write the common binomial (${commonBinomial}) times the remaining factor (${factor2}).`;
+
+    // Combined pairs step: write both factored pairs joined by operator
+    // Sign comes from secondGCFCoeff — positive → '+', negative → '−'
+    const combinedSign       = secondGCFCoeff >= 0 ? '+' : '−';
+    const combinedPairs      = `${firstPairResult} ${combinedSign} ${secondGCFCoeff < 0 ? secondGCFText.slice(1) : secondGCFText}(${commonBinomial})`;
+    const hint2b = `Write both factored pairs next to each other, separated by the appropriate sign. You should see the same binomial appearing in both.`;
+
+    const groupingWorkflow = [
+      { id: 'first-pair-gcf',  label: 'Factor the GCF from the first two terms — write as GCF(binomial)', hint: hint1,  expected: firstPairResult },
+      { id: 'second-pair-gcf', label: 'Factor the GCF from the last two terms — write as GCF(binomial)',  hint: hint2,  expected: secondPairResult },
+      { id: 'combined-pairs',  label: 'Write both factored pairs together',                                hint: hint2b, expected: combinedPairs },
+      { id: 'common-binomial', label: 'Identify the common binomial factor',                               hint: hint3,  expected: commonBinomial },
+      { id: 'final',           label: 'Write the factored form',                                           hint: hint4,  expected: answer }
+    ];
+
+    const groupingSteps = [{
+      expression,
+      rule: 'grouping',
+      output: answer,
+      explanation: `Group: (${firstPairTerms}) + (${secondPairTerms}) → ${firstPairResult} + ${secondPairResult} → ${answer}`
+    }];
+
+    return {
+      a, b, c, d,
+      factor1, factor2,
+      expression, terms, answer,
+      commonBinomial, firstPairResult, secondPairResult,
+      groupingWorkflow, groupingSteps
+    };
+  }
 
   // ---------------------------------------------------------------------------
   // generateGroupingProblem(proficiency)
@@ -843,137 +884,284 @@ window.Generators = (() => {
   // ---------------------------------------------------------------------------
   function generateGroupingProblem(proficiency) {
 
+    // Standalone grouping: (x+a)(bx^n+c) — first factor always linear (aXExponent=1)
+    // aRange=constant in first factor, bRange=x-coeff in second, cRange=constant in second
+    // Renamed to match new layer: a→a(const), b→c(x-coeff), c→d(const), bXExponent→cXExponent
     const configs = {
-      emerging:   { bRange: [1, 1], aRange: [2, 6],  cRange: [2, 8],  allowNegativeA: false, allowNegativeC: false, allowY: false },
-      developing: { bRange: [1, 1], aRange: [2, 8],  cRange: [2, 8],  allowNegativeA: true,  allowNegativeC: true,  allowY: false },
-      proficient: { bRange: [2, 4], aRange: [2, 6],  cRange: [2, 8],  allowNegativeA: false, allowNegativeC: false, allowY: false },
-      extending:  { bRange: [2, 5], aRange: [2, 8],  cRange: [2, 10], allowNegativeA: true,  allowNegativeC: true,  allowY: true  }
+      emerging:   { aRange:[1,1], bRange:[2,6],  cRange:[1,1], cXExponent:2, dRange:[2,8],  dYExponent:0, allowNegativeBorD:false },
+      developing: { aRange:[1,1], bRange:[2,8],  cRange:[1,1], cXExponent:2, dRange:[2,8],  dYExponent:0, allowNegativeBorD:true  },
+      proficient: { aRange:[1,1], bRange:[2,6],  cRange:[2,4], cXExponent:2, dRange:[2,8],  dYExponent:0, allowNegativeBorD:false },
+      extending:  { aRange:[1,1], bRange:[2,8],  cRange:[2,5], cXExponent:2, dRange:[2,10], dYExponent:0, allowNegativeBorD:true  }
     };
 
     const config = configs[proficiency];
 
-    // 50% chance of two-variable form at Extending: (x + a)(bx + cy)
-    const useY = config.allowY && choice([true, false]);
-
-    let a, b, c, attempts = 0;
-
-    do {
-      attempts++;
-      if (attempts > 200) { a = 2; b = 2; c = 3; break; }
-
-      b = randInt(config.bRange[0], config.bRange[1]);
-      a = randInt(config.aRange[0], config.aRange[1]) * (config.allowNegativeA ? choice([1, -1]) : 1);
-      c = randInt(config.cRange[0], config.cRange[1]) * (config.allowNegativeC ? choice([1, -1]) : 1);
-
-    } while (
-      gcdList([Math.abs(b), Math.abs(c)]) !== 1 ||   // no overall GCF
-      gcdList([Math.abs(a), Math.abs(c)]) !== 1 ||   // second pair GCF is exactly c (or cy)
-      (b === 1 && Math.abs(c) === 1)                 // avoid trivially simple
-    );
-
-    // --- Build the four terms ---
-    // Single-variable: bx³ + abx² + cx + ac     → (x + a)(bx² + c)
-    //   t1=bx³  t2=abx²  t3=cx   t4=ac
-    // Two-variable:   bx² + abx + cxy + acy     → (x + a)(bx + cy)
-    //   t1=bx²  t2=abx   t3=cxy  t4=acy
-    let t1, t2, t3, t4;
-    if (useY) {
-      t1 = { coefficient: b,     exponent: 2, yExponent: 0 };
-      t2 = { coefficient: a * b, exponent: 1, yExponent: 0 };
-      t3 = { coefficient: c,     exponent: 1, yExponent: 1 };
-      t4 = { coefficient: a * c, exponent: 0, yExponent: 1 };
-    } else {
-      t1 = { coefficient: b,     exponent: 3 };
-      t2 = { coefficient: a * b, exponent: 2 };
-      t3 = { coefficient: c,     exponent: 1 };
-      t4 = { coefficient: a * c, exponent: 0 };
+    // 50% chance of two-variable form at Extending: (x+b)(cx+dy)
+    if (proficiency === 'extending' && choice([true, false])) {
+      config.cXExponent = 1;
+      config.dYExponent = 1;
     }
 
-    const expression = formatPolynomial([t1, t2, t3, t4]);
-
-    // --- Factor pieces ---
-    const linearFactor = formatLinearFactor(a);   // common binomial: (x + a)
-
-    // Second factor: (bx² + c) single-variable or (bx + cy) two-variable
-    const secondFactor = useY
-      ? (c >= 0 ? `${b}x + ${c}y` : `${b}x - ${Math.abs(c)}y`)
-      : b === 1
-        ? (c >= 0 ? `x^2 + ${c}` : `x^2 - ${Math.abs(c)}`)
-        : (c >= 0 ? `${b}x^2 + ${c}` : `${b}x^2 - ${Math.abs(c)}`);
-
-    const answer = `(${linearFactor})(${secondFactor})`;
-
-    // --- First pair GCF ---
-    // Single: bx² from (bx³ + abx²)
-    // Two-var: bx  from (bx²  + abx)
-    const firstPairGCF    = useY ? (b === 1 ? 'x' : `${b}x`) : (b === 1 ? 'x^2' : `${b}x^2`);
-    const firstPairResult = `${firstPairGCF}(${linearFactor})`;
-
-    // --- Second pair GCF ---
-    // Single: c  from (cx + ac)
-    // Two-var: cy from (cxy + acy)
-    const cAbs = Math.abs(c);
-    const secondPairGCF    = useY
-      ? (c >= 0 ? `${cAbs}y` : `-${cAbs}y`)
-      : (c >= 0 ? (cAbs === 1 ? '1' : String(cAbs)) : `-${cAbs}`);
-    const secondPairResult = `${secondPairGCF}(${linearFactor})`;
-
-    // --- Hints ---
-    const firstPairTerms  = formatPolynomial([t1, t2]);
-    const secondPairTerms = formatPolynomial([t3, t4]);
-
-    const hint1 = `The first two terms are ${firstPairTerms}. Factor out their GCF and write the full result in the form GCF(binomial).`;
-    const hint2 = `The last two terms are ${secondPairTerms}. Factor out their GCF and write the full result in the form GCF(binomial). The binomial inside must match the one from the first pair.`;
-    const hint3 = `Both pairs share a common binomial factor. Look at what's inside the parentheses in each pair — what binomial appears in both?`;
-    const hint4 = `Write the common binomial (${linearFactor}) times the remaining factor (${secondFactor}).`;
-
-    // --- Workflow ---
-    const workflow = [
-      {
-        id: 'first-pair-gcf',
-        label: 'Factor the GCF from the first two terms — write as GCF(binomial)',
-        hint: hint1,
-        expected: firstPairResult
-      },
-      {
-        id: 'second-pair-gcf',
-        label: 'Factor the GCF from the last two terms — write as GCF(binomial)',
-        hint: hint2,
-        expected: secondPairResult
-      },
-      {
-        id: 'common-binomial',
-        label: 'Identify the common binomial factor',
-        hint: hint3,
-        expected: linearFactor
-      },
-      {
-        id: 'final',
-        label: 'Write the factored form',
-        hint: hint4,
-        expected: answer
-      }
-    ];
-
-    // --- Steps ---
-    const steps = [
-      {
-        expression,
-        rule: 'grouping',
-        output: answer,
-        explanation: `Group: (${firstPairTerms}) + (${secondPairTerms}) → ${firstPairResult} + ${secondPairResult} → ${answer}`
-      }
-    ];
+    const layer = generateGroupingLayer({
+      aRange:        [1, 1],
+      aXExponent:    1,
+      allowNegativeA: false,
+      bRange:        config.bRange,
+      allowNegativeB: config.allowNegativeBorD,
+      cRange:        config.cRange,
+      cXExponent:    config.cXExponent,
+      dRange:        config.dRange,
+      allowNegativeD: config.allowNegativeBorD,
+      dYExponent:    config.dYExponent
+    });
 
     return {
       id: `grp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       method: 'grouping',
       proficiency,
+      expression: layer.expression,
+      factors: [layer.factor1, layer.factor2],
+      answer: layer.answer,
+      steps: layer.groupingSteps,
+      workflow: layer.groupingWorkflow
+    };
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // generateTrinomialLayer({ aRange, bRange, cRange, dRange,
+  //                          allowNegativeB, allowNegativeD })
+  //
+  // Generates a trinomial from two linear factors (ax + b)(cx + d), handling
+  // both simple trinomials (a=c=1) and general trinomials (a or c > 1).
+  //
+  // Expands to: Ax² + Bx + C  where A=ac, B=ad+bc, C=bd
+  // Split values: p=ad, q=bc  so p+q=B and p*q=A*C
+  //
+  // If a=1 AND c=1 (simple trinomial territory):
+  //   - If aRange/cRange could produce >1: notes that coefficient of x² is 1,
+  //     allowing grouping to be skipped → writes (x+b)(x+d) directly
+  //   - Otherwise: pure simple trinomial, just writes (x+b)(x+d)
+  //
+  // If a>1 OR c>1 (general trinomial):
+  //   - Calls generateGroupingLayer internally with pinned values
+  //   - Appends grouping workflow steps after trinomial steps
+  //
+  // Parameters:
+  //   aRange, cRange    [min,max] for x-coefficients in each factor
+  //   bRange, dRange    [min,max] for constants in each factor
+  //   allowNegativeB/D  whether constants can be negative
+  //
+  // Returns:
+  //   a, b, c, d        raw factor values (for pinning into another layer)
+  //   trinomialTerms    [{A,exp:2},{B,exp:1},{C,exp:0}] for chaining into GCF
+  //   expression        formatted trinomial string
+  //   answer            formatted fully factored string
+  //   workflow, steps
+  // ---------------------------------------------------------------------------
+  function generateTrinomialLayer({
+    aRange, bRange, cRange, dRange,
+    allowNegativeB = false, allowNegativeD = false,
+    skipValidation = false
+  }) {
+    const couldBeGeneral = aRange[1] > 1 || cRange[1] > 1;
+
+    // Generate factors — retry until no hidden GCF in trinomial
+    let a, b, c, d, attempts = 0;
+    do {
+      attempts++;
+      if (attempts > 200) { a = 1; b = 2; c = 1; d = 3; break; }
+      a = randInt(aRange[0], aRange[1]);
+      b = randInt(bRange[0], bRange[1]) * (allowNegativeB ? choice([1, -1]) : 1);
+      c = randInt(cRange[0], cRange[1]);
+      d = randInt(dRange[0], dRange[1]) * (allowNegativeD ? choice([1, -1]) : 1);
+    } while (!skipValidation && (
+      b === 0 || d === 0 ||
+      gcdList([Math.abs(a * c), Math.abs(a * d + b * c), Math.abs(b * d)]) !== 1 ||
+      (a * d) === (b * c) ||
+      (a * d) === -(b * c)
+    ));
+
+    // Trinomial coefficients
+    const A = a * c;
+    const B = a * d + b * c;
+    const C = b * d;
+    const p = a * d;   // split value 1
+    const q = b * c;   // split value 2
+
+    // Trinomial terms (for chaining into GCF layer)
+    const trinomialTerms = [
+      { coefficient: A, exponent: 2 },
+      { coefficient: B, exponent: 1 },
+      { coefficient: C, exponent: 0 }
+    ];
+
+    const expression = formatPolynomial(trinomialTerms);
+
+    // Factor strings for answer and hints
+    const factor1 = formatSecondFactor(a, 1, b, 0);  // ax + b
+    const factor2 = formatSecondFactor(c, 1, d, 0);  // cx + d
+    const answer  = `(${factor1})(${factor2})`;
+
+    // --- Workflow steps 1-5 (identification + pair finding) ---
+    const workflow = [];
+    const steps    = [];
+
+    // Step: identify A (only if could be general)
+    if (couldBeGeneral) {
+      workflow.push({
+        id: 'identify-a',
+        label: 'Identify the coefficient of x²',
+        hint: `Look at the first term. What number multiplies x²?`,
+        expected: String(A)
+      });
+    }
+
+    // Step: identify B
+    workflow.push({
+      id: 'identify-b',
+      label: 'Identify the coefficient of x',
+      hint: `Look at the middle term. What number multiplies x?`,
+      expected: String(B)
+    });
+
+    // Step: identify C
+    workflow.push({
+      id: 'identify-c',
+      label: 'Identify the constant term',
+      hint: `Look at the last term. What is the number with no variable?`,
+      expected: String(C)
+    });
+
+    // Step: compute A×C (only if could be general)
+    if (couldBeGeneral) {
+      workflow.push({
+        id: 'compute-ac',
+        label: 'Multiply the coefficient of x² by the constant term',
+        hint: `Multiply ${A} × ${C}. This is the product your factor pair must equal.`,
+        expected: String(A * C)
+      });
+    }
+
+    // Step: find the pair
+    const product   = couldBeGeneral ? A * C : C;
+    const pairSorted = [p, q].slice().sort((x, y) => x - y).join(', ');
+    const cSign     = product >= 0 ? 'positive' : 'negative';
+    const findHint  = `You need two integers that multiply to ${product} and add to ${B}. ` +
+      `Think about factor pairs of ${Math.abs(product)}.` +
+      (product > 0 && B > 0 ? ` Since the product is positive and the sum is positive, both integers are positive.` : '') +
+      (product > 0 && B < 0 ? ` Since the product is positive and the sum is negative, both integers are negative.` : '') +
+      (product < 0 ? ` Since the product is negative, the integers have opposite signs. The one with the larger absolute value has the same sign as the sum (${B > 0 ? 'positive' : 'negative'}).` : '');
+
+    workflow.push({
+      id: 'find-factors',
+      label: couldBeGeneral
+        ? `Find two integers: product = (coefficient of x²) × (constant term), sum = coefficient of x`
+        : 'Find two integers: product = constant term, sum = coefficient of x',
+      hint: findHint,
+      expected: pairSorted,
+      inputType: 'pair'
+    });
+
+    // --- Branch: simple path vs grouping path ---
+    if (a === 1 && c === 1) {
+      // Simple trinomial — write factors directly
+      const finalLabel = couldBeGeneral
+        ? `The coefficient of x² is 1, so we can write the factored form directly as (x + first integer)(x + second integer)`
+        : `Write the factored form`;
+      const finalHint = `Use your two integers as the constants in each factor. ` +
+        `Remember: (x + negative number) writes as (x − positive number).`;
+      workflow.push({
+        id: 'final',
+        label: finalLabel,
+        hint: finalHint,
+        expected: answer
+      });
+      steps.push({
+        expression,
+        rule: 'st',
+        output: answer,
+        explanation: `Find p,q where p×q=${C} and p+q=${B}: p=${p}, q=${q}. So ${answer}.`
+      });
+
+    } else {
+      // General trinomial — split middle term then group.
+      // Call the unified generateGroupingLayer with pinned values from (ax+b)(cx+d).
+      // aXExponent=1, cXExponent=1 since both factors are linear after the split.
+      // Pass (c,d) as first factor and (a,b) as second so the layer produces
+      // the correct term order: acx² + adx + bcx + bd (p=ad first, q=bc second).
+      // allowNegative flags must be false when passing pinned values — the sign
+      // is already baked into the value, and the flag would randomly flip it.
+      const groupLayer = generateGroupingLayer({
+        aRange: [c, c], aXExponent: 1, allowNegativeA: false,
+        bRange: [d, d],                allowNegativeB: false,
+        cRange: [a, a], cXExponent: 1,
+        dRange: [b, b],                allowNegativeD: false, dYExponent: 0,
+        skipValidation: true   // values come from trinomial generator, already valid
+      });
+
+      const splitExpr = groupLayer.expression;
+
+      workflow.push({
+        id: 'rewrite',
+        label: `Rewrite the middle term using your two integers as separate x-terms`,
+        hint: `Replace ${B}x with your two integers as separate x-terms: ${p}x + ${q}x.`,
+        expected: splitExpr
+      });
+
+      // Append grouping workflow with grp- prefix to avoid id collisions
+      groupLayer.groupingWorkflow.forEach(step => {
+        workflow.push({ ...step, id: `grp-${step.id}` });
+      });
+
+      steps.push({
+        expression,
+        rule: 'gt',
+        output: answer,
+        explanation: `A×C=${A*C}, find p,q: p=${p}, q=${q}. Split: → group → ${answer}.`
+      });
+    }
+
+    return {
+      a, b, c, d,
+      trinomialTerms,
       expression,
-      factors: [linearFactor, secondFactor],
       answer,
-      steps,
-      workflow
+      workflow,
+      steps
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // generateGeneralTrinomialProblem(proficiency)
+  //
+  // ax² + bx + c where a > 1 — uses generateTrinomialLayer internally.
+  //
+  // Proficiency levels:
+  //   emerging:   small a,c (2-3), positive b,d, small products
+  //   developing: a,c (2-3), b,d can be negative
+  //   proficient: larger a,c (2-5), mixed signs, more demanding A×C
+  //   extending:  larger a,c (2-6), mixed signs, highly composite A×C
+  // ---------------------------------------------------------------------------
+  function generateGeneralTrinomialProblem(proficiency) {
+    const configs = {
+      emerging:   { aRange:[2,3], bRange:[1,6],  cRange:[2,3], dRange:[1,6],  allowNegativeB:false, allowNegativeD:false },
+      developing: { aRange:[2,3], bRange:[1,8],  cRange:[2,3], dRange:[1,8],  allowNegativeB:true,  allowNegativeD:true  },
+      proficient: { aRange:[2,5], bRange:[1,8],  cRange:[2,5], dRange:[1,8],  allowNegativeB:true,  allowNegativeD:true  },
+      extending:  { aRange:[2,6], bRange:[1,10], cRange:[2,6], dRange:[1,10], allowNegativeB:true,  allowNegativeD:true  }
+    };
+
+    const config = configs[proficiency];
+    const layer  = generateTrinomialLayer(config);
+
+    return {
+      id: `gt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      method: 'gt',
+      proficiency,
+      expression: layer.expression,
+      answer:     layer.answer,
+      steps:      layer.steps,
+      workflow:   layer.workflow
     };
   }
 
@@ -995,6 +1183,9 @@ window.Generators = (() => {
     }
     if (settings.method === 'grouping') {
       return generateGroupingProblem(settings.difficulty);
+    }
+    if (settings.method === 'gt') {
+      return generateGeneralTrinomialProblem(settings.difficulty);
     }
     return null;
   }

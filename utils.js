@@ -95,7 +95,7 @@ window.Utils = (() => {
   }
 
   // Like rawToPretty but returns safe HTML with variables wrapped in styled spans.
-  // Also wraps the exponent placeholder □ in a blink-styled span so students
+  // Also wraps the ⁰ exponent placeholder in a blink-styled span so students
   // can see where their exponent digit will go.
   // Use this for innerHTML display fields only — not for plain text contexts.
   function rawToPrettyHtml(raw) {
@@ -169,21 +169,39 @@ window.Utils = (() => {
   // ---------------------------------------------------------------------------
   // formatLinearFactor(root)
   //
-  // Formats a linear factor as a readable string with correct sign display.
-  // Used wherever (x + n) or (x − n) factors appear.
+  // Convenience wrapper — formats (x + root) or (x − |root|).
+  // Delegates to formatPolynomial so all formatting logic stays in one place.
   //   formatLinearFactor(3)  → "x + 3"
   //   formatLinearFactor(-5) → "x - 5"
-  //   formatLinearFactor(0)  → "x"  (degenerate case, included for safety)
   // ---------------------------------------------------------------------------
   function formatLinearFactor(root) {
-    if (root === 0) return 'x';
-    return root > 0 ? `x + ${root}` : `x - ${Math.abs(root)}`;
+    return formatPolynomial([
+      { coefficient: 1,    exponent: 1 },
+      { coefficient: root, exponent: 0 }
+    ]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // formatSecondFactor(b, bXExp, c, cYExp)
+  //
+  // Convenience wrapper — formats the second factor in a grouping problem.
+  // Delegates to formatPolynomial so all formatting logic stays in one place.
+  //   formatSecondFactor(2, 2, 5, 0) → "2x^2 + 5"
+  //   formatSecondFactor(3, 1, 4, 1) → "3x + 4y"
+  //   formatSecondFactor(1, 2, -7, 0) → "x^2 - 7"
+  // ---------------------------------------------------------------------------
+  function formatSecondFactor(b, bXExp, c, cYExp = 0) {
+    return formatPolynomial([
+      { coefficient: b, exponent: bXExp },
+      { coefficient: c, exponent: 0, yExponent: cYExp }
+    ]);
   }
 
   return {
     buildFromPrimes,
     choice,
     formatLinearFactor,
+    formatSecondFactor,
     generateSeed,
     setSeed,
     clearSeed,
