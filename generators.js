@@ -13,17 +13,22 @@ window.Generators = (() => {
   } = window.Utils;
 
   // ---------------------------------------------------------------------------
-  // isValidGroupingFactors(a, b, c)
+  // isValidGroupingFactors(a, b, c, cXExponent)
   //
-  // Validates that the three values produce a clean grouping problem:
+  // Validates that the values produce a clean standalone grouping problem:
   //   - gcd(b, c) = 1  — no overall GCF hiding in the full polynomial
   //   - gcd(a, c) = 1  — second pair GCF is exactly c (or cy), not a multiple
   //   - not (b=1 and |c|=1)  — avoids trivially simple problems
+  //   - second factor (cx^n + d) must not itself be a DoS — prevents chained
+  //     factoring problems appearing as standalone grouping problems
+  //     (e.g. (x+10)(x²−25) looks like grouping but x²−25 is a DoS)
   // ---------------------------------------------------------------------------
-  function isValidGroupingFactors(a, b, c) {
+  function isValidGroupingFactors(a, b, c, cXExponent = 2) {
     if (gcdList([Math.abs(b), Math.abs(c)]) !== 1) return false;
     if (gcdList([Math.abs(a), Math.abs(c)]) !== 1) return false;
     if (b === 1 && Math.abs(c) === 1) return false;
+    // Second factor is DoS when: cx^(even) + d where d < 0, c and |d| are perfect squares
+    if (cXExponent % 2 === 0 && b < 0 && isPerfectSquare(c) && isPerfectSquare(Math.abs(b))) return false;
     return true;
   }
 
@@ -313,6 +318,162 @@ window.Generators = (() => {
   }
 
   // ---------------------------------------------------------------------------
+  // generateDoSLayer({ aRoot, bRoot, varExponent, useY })
+  //
+  // Shared primitive for any problem with a Difference of Squares step.
+  // Accepts exact values (already generated/validated by caller).
+  //
+  // Structure: a²x^2n − b²y^2m → (ax^n + by^m)(ax^n − by^m)
+  //   where m=0 for single-variable (y term is just the constant b²)
+  //
+  // Returns:
+  //   innerTerms    — [{a²x^2n}, {-b²y^2m}] for chaining into GCF layer
+  //   expression    — formatted polynomial string
+  //   answer        — formatted factored form
+  //   aRootTermText, bRootTermText — the two square roots
+  //   dosWorkflow, dosSteps
+  // ---------------------------------------------------------------------------
+  function generateDoSLayer({ aRoot, bRoot, varExponent, useY = false }) {
+    const a = aRoot * aRoot;
+    const b = bRoot * bRoot;
+    const halfExponent = varExponent / 2;
+
+    const innerTerms = useY
+      ? [{ coefficient: a,  exponent: varExponent },
+         { coefficient: -b, exponent: 0, yExponent: 2 }]
+      : [{ coefficient: a,  exponent: varExponent },
+         { coefficient: -b, exponent: 0 }];
+
+    const expression     = formatPolynomial(innerTerms);
+    const aRootTermText  = formatFactorPiece(aRoot, halfExponent);
+    const bRootTermText  = useY ? formatFactorPiece(bRoot, 1, 'y') : String(bRoot);
+    const leftFactor     = `${aRootTermText} + ${bRootTermText}`;
+    const rightFactor    = `${aRootTermText} - ${bRootTermText}`;
+    const answer         = `(${leftFactor})(${rightFactor})`;
+
+    const firstTermDesc  = a === 1 && varExponent === 2 ? 'x²'
+      : a === 1 ? `x^${varExponent}`
+      : varExponent === 2 ? `${a}x²`
+      : `${a}x^${varExponent}`;
+    const secondTermDesc = useY ? (b === 1 ? 'y²' : `${b}y²`) : String(b);
+
+    const firstTermHint  = `The first term is ${firstTermDesc}. What is √(${firstTermDesc})?`;
+    const secondTermHint = useY
+      ? `The second term is ${secondTermDesc}. What is √(${secondTermDesc})?`
+      : `The second term is ${b}. What is √${b}?`;
+    const finalHint = `Write (A + B)(A − B) where A = ${aRootTermText} and B = ${bRootTermText}.`;
+
+    const dosWorkflow = [
+      { id: 'first-root',  label: 'Find the square root of the first term',  hint: firstTermHint,  expected: aRootTermText },
+      { id: 'second-root', label: 'Find the square root of the second term', hint: secondTermHint, expected: bRootTermText },
+      { id: 'final',       label: 'Write the factored form (A + B)(A − B)',  hint: finalHint,      expected: answer }
+    ];
+
+    const dosSteps = [{
+      expression,
+      rule: 'dos',
+      output: answer,
+      explanation: `Difference of squares: √(${firstTermDesc}) = ${aRootTermText}, √(${secondTermDesc}) = ${bRootTermText}, so (${aRootTermText} + ${bRootTermText})(${aRootTermText} − ${bRootTermText}).`
+    }];
+
+    return {
+      aRoot, bRoot, varExponent, useY,
+      innerTerms, expression, answer,
+      aRootTermText, bRootTermText,
+      leftFactor, rightFactor,
+      dosWorkflow, dosSteps
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // generatePSTLayer({ aRoot, bRootAbs, bRoot, varExponent, useY })
+  //
+  // Shared primitive for any problem with a Perfect Square Trinomial step.
+  // Accepts exact values (already generated/validated by caller).
+  //
+  // Structure: a²x^2n ± 2ab·x^n + b² → (ax^n ± b)²
+  //   Two-variable: a²x^2n ± 2ab·x^n·y + b²y² → (ax^n ± by)²
+  //
+  // Returns:
+  //   innerTerms    — three-term structure for chaining into GCF layer
+  //   expression    — formatted polynomial string
+  //   answer        — formatted factored form
+  //   pstWorkflow, pstSteps
+  // ---------------------------------------------------------------------------
+  function generatePSTLayer({ aRoot, bRootAbs, bRoot, varExponent, useY = false }) {
+    const halfExp    = varExponent / 2;
+    const leadCoeff  = aRoot * aRoot;
+    const midCoeff   = 2 * aRoot * bRoot;
+    const constCoeff = bRootAbs * bRootAbs;
+    const midExp     = halfExp;
+
+    const innerTerms = useY
+      ? [{ coefficient: leadCoeff,  exponent: varExponent, yExponent: 0 },
+         { coefficient: midCoeff,   exponent: midExp,      yExponent: 1 },
+         { coefficient: constCoeff, exponent: 0,           yExponent: 2 }]
+      : [{ coefficient: leadCoeff,  exponent: varExponent },
+         { coefficient: midCoeff,   exponent: midExp      },
+         { coefficient: constCoeff, exponent: 0           }];
+
+    const expression  = formatPolynomial(innerTerms);
+    const aRootText   = formatFactorPiece(aRoot, halfExp);
+    const bRootText   = useY ? formatFactorPiece(bRootAbs, 1, 'y') : String(bRootAbs);
+    const bSign       = bRoot >= 0 ? '+' : '−';
+    const innerFactor = `${aRootText} ${bSign} ${bRootText}`;
+    const answer      = `(${innerFactor})^2`;
+
+    const firstTermDesc = leadCoeff === 1 && varExponent === 2 ? 'x²'
+      : leadCoeff === 1 ? `x^${varExponent}`
+      : varExponent === 2 ? `${leadCoeff}x²`
+      : `${leadCoeff}x^${varExponent}`;
+    const lastTermDesc  = useY ? (constCoeff === 1 ? 'y²' : `${constCoeff}y²`) : String(constCoeff);
+
+    const expectedMiddleAbs = (() => {
+      const absCoeff = Math.abs(midCoeff);
+      const varPart  = useY
+        ? (midExp === 1 ? 'xy' : `x^${midExp}y`)
+        : (midExp === 1 ? 'x'  : `x^${midExp}`);
+      return `${absCoeff}${varPart}`;
+    })();
+    const middleSign  = midCoeff >= 0 ? '+' : '-';
+    const middleTermDesc = (() => {
+      const absCoeff = Math.abs(midCoeff);
+      const varPart  = useY ? (midExp === 1 ? 'xy' : `x^${midExp}y`) : (midExp === 1 ? 'x' : `x^${midExp}`);
+      return `${midCoeff >= 0 ? '+' : '−'} ${absCoeff}${varPart}`;
+    })();
+
+    const firstRootHint = `The first term is ${firstTermDesc}. What is √(${firstTermDesc})?`;
+    const lastRootHint  = useY
+      ? `The last term is ${lastTermDesc}. Square roots are always positive — what is √(${lastTermDesc})?`
+      : `The last term is ${constCoeff}. Square roots are always positive — what is √${constCoeff}?`;
+    const verifyHint    = `Multiply 2 × first_root × last_root: 2 × ${aRootText} × ${bRootText}. Enter the result as a positive value — we check the sign separately.`;
+    const signHint      = `Look at the middle term of the original expression (${middleTermDesc}). Is it positive or negative? Enter + or −.`;
+    const finalHint     = `Use the sign from the previous step. Write (first_root ± last_root)² with the correct sign between the roots.`;
+
+    const pstWorkflow = [
+      { id: 'first-root',    label: 'Find the square root of the first term',                             hint: firstRootHint, expected: aRootText    },
+      { id: 'last-root',     label: 'Find the square root of the last term (always positive)',             hint: lastRootHint,  expected: bRootText    },
+      { id: 'verify-middle', label: 'Verify: 2 × first_root × last_root matches the middle term (ignore its sign)', hint: verifyHint, expected: expectedMiddleAbs },
+      { id: 'middle-sign',   label: 'What is the sign of the middle term?',                               hint: signHint,      expected: middleSign   },
+      { id: 'final',         label: 'Write the factored form (first_root ± last_root)²',                  hint: finalHint,     expected: answer       }
+    ];
+
+    const pstSteps = [{
+      expression,
+      rule: 'pst',
+      output: answer,
+      explanation: `Perfect square trinomial: √(${firstTermDesc}) = ${aRootText}, √${constCoeff} = ${bRootAbs}, middle = 2×${aRootText}×${bRootAbs} = ${expectedMiddleAbs} ✓`
+    }];
+
+    return {
+      aRoot, bRootAbs, bRoot, varExponent, useY,
+      innerTerms, expression, answer,
+      aRootText, bRootText, innerFactor,
+      pstWorkflow, pstSteps
+    };
+  }
+
+  // ---------------------------------------------------------------------------
   // generateDifferenceOfSquaresProblem(proficiency)
   //
   // Generates a difference of squares problem: A² − B² → (A+B)(A−B)
@@ -353,62 +514,17 @@ window.Generators = (() => {
       while (bRoot === aRoot) bRoot = randInt(config.bRootRange[0], config.bRootRange[1]);
     }
 
-    const a = aRoot * aRoot;
-    const b = bRoot * bRoot;
-    const halfExponent = varExponent / 2;
-
-    const expression = useY
-      ? formatPolynomial([
-          { coefficient: a,  exponent: varExponent },
-          { coefficient: -b, exponent: 0, yExponent: 2 }
-        ])
-      : formatPolynomial([
-          { coefficient: a,  exponent: varExponent },
-          { coefficient: -b, exponent: 0 }
-        ]);
-
-    const aRootTermText = formatFactorPiece(aRoot, halfExponent);
-    const bRootTermText = useY ? formatFactorPiece(bRoot, 1, 'y') : String(bRoot);
-    const leftFactor    = `${aRootTermText} + ${bRootTermText}`;
-    const rightFactor   = `${aRootTermText} - ${bRootTermText}`;
-    const answer        = `(${leftFactor})(${rightFactor})`;
-
-    const firstTermDesc  = a === 1 && varExponent === 2 ? 'x²'
-      : a === 1 ? `x^${varExponent}`
-      : varExponent === 2 ? `${a}x²`
-      : `${a}x^${varExponent}`;
-    const secondTermDesc = useY ? (b === 1 ? 'y²' : `${b}y²`) : String(b);
-
-    const firstTermHint  = `The first term is ${firstTermDesc}. What is √(${firstTermDesc})?`;
-    const secondTermHint = useY
-      ? `The second term is ${secondTermDesc}. What is √(${secondTermDesc})?`
-      : `The second term is ${b}. What is √${b}?`;
-    const finalHint = `Write (A + B)(A − B) where A = ${aRootTermText} and B = ${bRootTermText}.`;
-
-    const workflow = [
-      { id: 'first-root',  label: 'Find the square root of the first term',  hint: firstTermHint,  expected: aRootTermText },
-      { id: 'second-root', label: 'Find the square root of the second term', hint: secondTermHint, expected: bRootTermText },
-      { id: 'final',       label: 'Write the factored form (A + B)(A − B)',  hint: finalHint,      expected: answer }
-    ];
-
-    const steps = [
-      {
-        expression,
-        rule: 'dos',
-        output: answer,
-        explanation: `Difference of squares: √(${firstTermDesc}) = ${aRootTermText}, √(${secondTermDesc}) = ${bRootTermText}, so (${aRootTermText} + ${bRootTermText})(${aRootTermText} − ${bRootTermText}).`
-      }
-    ];
+    const layer = generateDoSLayer({ aRoot, bRoot, varExponent, useY });
 
     return {
       id: `dos-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       method: 'dos',
       proficiency,
-      expression,
-      factors: [leftFactor, rightFactor],
-      answer,
-      steps,
-      workflow
+      expression: layer.expression,
+      factors:    [layer.leftFactor, layer.rightFactor],
+      answer:     layer.answer,
+      steps:      layer.dosSteps,
+      workflow:   layer.dosWorkflow
     };
   }
 
@@ -471,136 +587,18 @@ window.Generators = (() => {
 
     // 50% chance of two-variable form at Extending: (ax^n ± by)²
     const useY = config.allowY && choice([true, false]);
-    const halfExp = varExponent / 2;
 
-    // --- Build the three terms ---
-    // Single-variable: a²x^2n ± 2ab·x^n + b²       → (ax^n ± b)²
-    // Two-variable:    a²x^2n ± 2ab·x^n·y + b²y²   → (ax^n ± by)²
-    const leadCoeff   = aRoot * aRoot;
-    const midCoeff    = 2 * aRoot * bRoot;    // signed
-    const constCoeff  = bRootAbs * bRootAbs;  // always positive
-    const midExponent = halfExp;              // x^n in middle term
-
-    const expression = useY
-      ? formatPolynomial([
-          { coefficient: leadCoeff,  exponent: varExponent, yExponent: 0 },
-          { coefficient: midCoeff,   exponent: midExponent, yExponent: 1 },
-          { coefficient: constCoeff, exponent: 0,           yExponent: 2 }
-        ])
-      : formatPolynomial([
-          { coefficient: leadCoeff,  exponent: varExponent },
-          { coefficient: midCoeff,   exponent: midExponent },
-          { coefficient: constCoeff, exponent: 0 }
-        ]);
-
-    // --- Factored form ---
-    const aRootText  = formatFactorPiece(aRoot, halfExp);          // e.g. 2x^2
-    const bRootText  = useY ? formatFactorPiece(bRootAbs, 1, 'y') : String(bRootAbs); // e.g. 3y or 3
-    const bSign      = bRoot >= 0 ? '+' : '−';
-    const innerFactor = `${aRootText} ${bSign} ${bRootText}`;
-    const answer      = `(${innerFactor})^2`;
-
-    // --- Descriptions for hints ---
-    const firstTermDesc = leadCoeff === 1 && varExponent === 2 ? 'x²'
-      : leadCoeff === 1 ? `x^${varExponent}`
-      : varExponent === 2 ? `${leadCoeff}x²`
-      : `${leadCoeff}x^${varExponent}`;
-
-    const lastTermDesc = useY
-      ? (constCoeff === 1 ? 'y²' : `${constCoeff}y²`)
-      : String(constCoeff);
-
-    const middleTermDesc = (() => {
-      const absCoeff = Math.abs(midCoeff);
-      const varPart  = useY
-        ? (midExponent === 1 ? 'xy' : `x^${midExponent}y`)
-        : (midExponent === 1 ? 'x'  : `x^${midExponent}`);
-      const sign = midCoeff >= 0 ? '+' : '−';
-      return `${sign} ${absCoeff}${varPart}`;
-    })();
-
-    const expectedMiddle = (() => {
-      const absCoeff = Math.abs(midCoeff);
-      const varPart  = useY
-        ? (midExponent === 1 ? 'xy' : `x^${midExponent}y`)
-        : (midExponent === 1 ? 'x'  : `x^${midExponent}`);
-      return midCoeff >= 0 ? `${absCoeff}${varPart}` : `-${absCoeff}${varPart}`;
-    })();
-
-    // expectedMiddleAbs: the positive magnitude for the verify step
-    // expectedMiddle: signed, kept for the steps explanation
-    const expectedMiddleAbs = (() => {
-      const absCoeff = Math.abs(midCoeff);
-      const varPart  = useY
-        ? (midExponent === 1 ? 'xy' : `x^${midExponent}y`)
-        : (midExponent === 1 ? 'x'  : `x^${midExponent}`);
-      return `${absCoeff}${varPart}`;
-    })();
-
-    const middleSign = midCoeff >= 0 ? '+' : '-';
-
-    // --- Hints ---
-    const firstRootHint   = `The first term is ${firstTermDesc}. What is √(${firstTermDesc})?`;
-    const lastRootHint    = useY
-      ? `The last term is ${lastTermDesc}. Square roots are always positive — what is √(${lastTermDesc})?`
-      : `The last term is ${constCoeff}. Square roots are always positive — what is √${constCoeff}?`;
-    const verifyHint      = `Multiply 2 × first_root × last_root: 2 × ${aRootText} × ${bRootText}. Enter the result as a positive value — we check the sign separately.`;
-    const signHint        = `Look at the middle term of the original expression (${middleTermDesc}). Is it positive or negative? Enter + or −.`;
-    const finalHint       = `Use the sign from the previous step. Write (first_root ± last_root)² with the correct sign between the roots.`;
-
-    // --- Workflow ---
-    const workflow = [
-      {
-        id: 'first-root',
-        label: 'Find the square root of the first term',
-        hint: firstRootHint,
-        expected: aRootText
-      },
-      {
-        id: 'last-root',
-        label: 'Find the square root of the last term (always positive)',
-        hint: lastRootHint,
-        expected: bRootText
-      },
-      {
-        id: 'verify-middle',
-        label: 'Verify: 2 × first_root × last_root matches the middle term (ignore its sign)',
-        hint: verifyHint,
-        expected: expectedMiddleAbs
-      },
-      {
-        id: 'middle-sign',
-        label: 'What is the sign of the middle term?',
-        hint: signHint,
-        expected: middleSign
-      },
-      {
-        id: 'final',
-        label: 'Write the factored form (first_root ± last_root)²',
-        hint: finalHint,
-        expected: answer
-      }
-    ];
-
-    // --- Steps ---
-    const steps = [
-      {
-        expression,
-        rule: 'pst',
-        output: answer,
-        explanation: `Perfect square trinomial: √(${firstTermDesc}) = ${aRootText}, √${constCoeff} = ${bRootAbs}, middle term = 2 × ${aRootText} × ${bRootAbs} = ${expectedMiddle} ✓`
-      }
-    ];
+    const layer = generatePSTLayer({ aRoot, bRootAbs, bRoot, varExponent, useY });
 
     return {
       id: `pst-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       method: 'pst',
       proficiency,
-      expression,
-      factors: [innerFactor],
-      answer,
-      steps,
-      workflow
+      expression: layer.expression,
+      factors:    [layer.innerFactor],
+      answer:     layer.answer,
+      steps:      layer.pstSteps,
+      workflow:   layer.pstWorkflow
     };
   }
 
@@ -777,7 +775,7 @@ window.Generators = (() => {
       b = randInt(bRange[0], bRange[1]) * (allowNegativeB ? choice([1, -1]) : 1);
       c = randInt(cRange[0], cRange[1]);
       d = randInt(dRange[0], dRange[1]) * (allowNegativeD ? choice([1, -1]) : 1);
-    } while (!skipValidation && (b === 0 || d === 0 || !isValidGroupingFactors(b, c, d)));
+    } while (!skipValidation && (b === 0 || d === 0 || !isValidGroupingFactors(b, c, d, cXExponent)));
 
     // Build four terms: (ax+b)(cx^n+dy^m)
     // = acx^(n+aXExp) + bcx^n + adx^aXExp·y^dYExp + bd·y^dYExp

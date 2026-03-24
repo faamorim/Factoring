@@ -142,10 +142,14 @@ deliberately deferred and why.
 - `generateGroupingLayer()` — unified grouping primitive for
   `(ax+b)(cx^n+dy^m)`, GCFs derived via gcd(), covers standalone
   grouping and general trinomial grouping from a single source
+- `generateDoSLayer()` — reusable DoS workflow builder
+- `generatePSTLayer()` — reusable PST workflow builder
 - `generateTrinomialLayer()` — shared trinomial primitive for both
   Simple and General Trinomial, calls grouping layer internally
 - `generateInsideTerms()`, `isValidGroupingFactors()` — validated
-  term/factor generators
+  term/factor generators. Grouping validator now rejects second factors
+  that are themselves a DoS (e.g. x²−25), preventing chained factoring
+  problems from appearing as standalone grouping problems.
 
 ### Planned
 - **`normalizeAnswer(str, method)`** — method-aware normalization
