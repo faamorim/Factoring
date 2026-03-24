@@ -1165,6 +1165,82 @@ window.Generators = (() => {
     };
   }
 
+
+  // ---------------------------------------------------------------------------
+  // generateMixedMethodProblem(proficiency)
+  //
+  // Picks a random factoring method, generates a problem using the existing
+  // generator for that method, then prepends a method-identification step
+  // to the workflow.
+  //
+  // Method weights (out of 20):
+  //   GCF: 5  DoS: 3  PST: 3  ST: 4  Grouping: 2  GT: 3
+  //
+  // The identification step uses inputType: 'radio' — the student selects
+  // the method name from a list. Correct selection immediately unlocks the
+  // remaining workflow steps. Wrong selection shows feedback but doesn't
+  // advance.
+  //
+  // In Final Answer mode the identification step is skipped entirely —
+  // the student just enters the factored form directly.
+  // ---------------------------------------------------------------------------
+  function generateMixedMethodProblem(proficiency) {
+    const methodPool = [
+      'gcf', 'gcf', 'gcf', 'gcf', 'gcf',
+      'dos', 'dos', 'dos',
+      'pst', 'pst', 'pst',
+      'st',  'st',  'st',  'st',
+      'grouping', 'grouping',
+      'gt',  'gt',  'gt'
+    ];
+
+    const method = choice(methodPool);
+    const inner  = generateProblem({ method, difficulty: proficiency });
+
+    if (!inner) return null;
+
+    // Method display names and hint text for the identification step
+    const methodNames = {
+      gcf:      'GCF (Greatest Common Factor)',
+      dos:      'Difference of Squares',
+      pst:      'Perfect Square Trinomial',
+      st:       'Simple Trinomial',
+      grouping: 'Grouping',
+      gt:       'General Trinomial'
+    };
+
+    const identHint =
+      `Count the terms first:
+` +
+      `• 2 terms → likely Difference of Squares
+` +
+      `• 3 terms → check if it's a Perfect Square Trinomial (first and last terms are perfect squares, middle = 2·√first·√last). If not, is the leading coefficient 1? → Simple Trinomial. Greater than 1? → General Trinomial.
+` +
+      `• 4 terms → Grouping
+` +
+      `• Any → always check for a GCF first!`;
+
+    const identStep = {
+      id:        'identify-method',
+      label:     'Identify the factoring method',
+      hint:      identHint,
+      expected:  method,
+      inputType: 'radio',
+      options:   Object.entries(methodNames).map(([value, label]) => ({ value, label }))
+    };
+
+    return {
+      id:         `mixed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      method:     'mixed',
+      innerMethod: method,
+      proficiency,
+      expression: inner.expression,
+      answer:     inner.answer,
+      steps:      inner.steps,
+      workflow:   [identStep, ...inner.workflow]
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // generateProblem(settings)
   // ---------------------------------------------------------------------------
@@ -1186,6 +1262,9 @@ window.Generators = (() => {
     }
     if (settings.method === 'gt') {
       return generateGeneralTrinomialProblem(settings.difficulty);
+    }
+    if (settings.method === 'mixed') {
+      return generateMixedMethodProblem(settings.difficulty);
     }
     return null;
   }

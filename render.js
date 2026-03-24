@@ -62,24 +62,73 @@ window.Renderer = (() => {
     const list = document.createElement('div');
     list.className = 'guided-list';
 
+    // For mixed method: steps after identify-method are locked until
+    // the identification step is marked correct
+    const identStep = state.currentProblem.workflow.find(s => s.inputType === 'radio');
+    const identCorrect = identStep
+      ? state.stepStatuses[identStep.id] === 'correct'
+      : true;
+
     state.currentProblem.workflow.forEach((step) => {
       ensureInputRecord(state, step.id);
       const record = state.inputValues[step.id];
       const status = state.stepStatuses[step.id];
 
+      // Lock non-identification steps until method is identified
+      const isLocked = step.inputType !== 'radio' && identStep && !identCorrect;
+
       const item = document.createElement('div');
       item.className = 'guided-step';
       item.dataset.stepId = step.id;
-      if (status === 'correct') item.classList.add('correct');
+      if (status === 'correct')   item.classList.add('correct');
       if (status === 'incorrect') item.classList.add('incorrect');
       if (status === 'downstream') item.classList.add('downstream');
+      if (isLocked) item.classList.add('locked');
 
       const label = document.createElement('div');
       label.className = 'step-label';
       label.textContent = step.label;
 
+      // Radio steps — method identification
+      if (step.inputType === 'radio') {
+        const radioWrap = document.createElement('div');
+        radioWrap.className = 'radio-options';
+        step.options.forEach(opt => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'radio-option';
+          btn.textContent = opt.label;
+          if (state.inputValues[step.id]?.raw === opt.value) {
+            btn.classList.add(status === 'correct' ? 'selected-correct' : 'selected-incorrect');
+          }
+          if (status !== 'correct') {
+            btn.addEventListener('click', () => {
+              state.inputValues[step.id] = { raw: opt.value, display: opt.label };
+              // Immediately evaluate so correct selection unlocks remaining steps
+              if (opt.value === step.expected) {
+                state.stepStatuses[step.id] = 'correct';
+                render();
+                const nextStep = state.currentProblem.workflow.find(
+                  s => s.id !== step.id && !(state.inputValues[s.id]?.raw?.trim())
+                );
+                if (nextStep) setTimeout(() => {
+                  const el = document.getElementById('workArea');
+                  if (el) el.querySelector(`[data-step-id="${nextStep.id}"]`)
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+              } else {
+                state.stepStatuses[step.id] = 'incorrect';
+                render();
+              }
+            });
+          }
+          radioWrap.appendChild(btn);
+        });
+        item.appendChild(label);
+        item.appendChild(radioWrap);
+
       // Pair steps get two side-by-side input fields, each independently focusable
-      if (step.inputType === 'pair') {
+      } else if (step.inputType === 'pair') {
         const pairWrap = document.createElement('div');
         pairWrap.className = 'pair-input-wrap';
 
@@ -121,11 +170,11 @@ window.Renderer = (() => {
         display.addEventListener('click', () => selectInput(state, step.id, render));
 
         item.appendChild(label);
-        item.appendChild(display);
+        if (!isLocked) item.appendChild(display);
       }
 
       // Inline hint, shown only after student requests it
-      if (state.revealedHints?.[step.id]) {
+      if (!isLocked && state.revealedHints?.[step.id]) {
         const hintEl = document.createElement('div');
         hintEl.className = 'step-hint';
         hintEl.innerHTML = `💡 ${rawToPrettyHtml(step.hint)}`;

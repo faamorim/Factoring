@@ -13,23 +13,20 @@ deliberately deferred and why.
 - **Perfect Square Trinomial** — single and two-variable at Extending,
   chained factoring prevention built in
 - **Simple Trinomial** — x² + bx + c (a = 1), prime-based number
-  generation for controlled difficulty
+  generation, routes through generateTrinomialLayer
+- **Grouping** — four-term polynomials, two-variable at Extending,
+  five-step workflow including combined-pairs intermediate step
+- **General Trinomial** — ax² + bx + c (a > 1), routes through
+  generateTrinomialLayer which internally calls generateGroupingLayer
+- **Mixed Method** — randomly selects from all six methods using a
+  weighted pool (GCF 25%, ST 20%, DoS/PST/GT 15% each, Grouping 10%).
+  Guided mode: radio button method identification step first, remaining
+  steps locked until correct method selected. Final answer mode: skips
+  identification entirely. Decision-tree hint walks through term count
+  and pattern recognition.
 
 ### Planned — in curriculum order
-1. **Grouping** — four-term polynomials, already split, student finds
-   GCF of each pair then factors out the binomial GCF.
-   *Prerequisite for General Trinomial.*
-
-2. **General Trinomial** — ax² + bx + c (a > 1), find factors of a×c,
-   split the middle term, apply grouping. Builds directly on both
-   Simple Trinomial and Grouping.
-
-3. **Mixed Method** — one method per problem, student must identify
-   which pattern applies before factoring. First guided step is method
-   identification (radio buttons). Wrong method gets different feedback
-   than wrong algebra.
-
-4. **Full Factoring** — chained problems (GCF → something else).
+1. **Full Factoring** — chained problems (GCF → something else).
    Workflow: "Is there a GCF?" → GCF steps → "Can it be factored
    further?" → method identification → continue.
    *This is where higher y exponents in DoS become valid.*
@@ -138,19 +135,19 @@ deliberately deferred and why.
 ### Built
 - `buildFromPrimes(pool, maxPrimeCount, maxFactor)` — shared utility
   for generating numbers with controlled prime factorization complexity
-- `formatLinearFactor(root)` — shared (x + n) / (x − n) formatter
-- `generateGCFLayer()` — reusable GCF workflow builder for chained
-  problems (Full Factoring will call this directly)
-- `generateInsideTerms()` — validated inside-term generator with no
-  hidden GCF
+- `formatLinearFactor(root)`, `formatSecondFactor(b, bXExp, c, cYExp)`
+  — convenience wrappers delegating to `formatPolynomial`
+- `generateGCFLayer()` — reusable GCF workflow builder, builds
+  expression internally, returns `fullTerms` for chaining
+- `generateGroupingLayer()` — unified grouping primitive for
+  `(ax+b)(cx^n+dy^m)`, GCFs derived via gcd(), covers standalone
+  grouping and general trinomial grouping from a single source
+- `generateTrinomialLayer()` — shared trinomial primitive for both
+  Simple and General Trinomial, calls grouping layer internally
+- `generateInsideTerms()`, `isValidGroupingFactors()` — validated
+  term/factor generators
 
 ### Planned
-- **`generateGroupingLayer()`** — extract from `generateGroupingProblem`
-  when Full Factoring is introduced, matching the `generateGCFLayer`
-  pattern. Accepts pre-chosen factors from an external caller instead
-  of generating them internally. Full Factoring will pick its own
-  binomials, expand them, then call this layer for workflow/hints/steps.
-
 - **`normalizeAnswer(str, method)`** — method-aware normalization
   that applies factor sorting and term sorting appropriate to the
   problem type. Replaces the current single-strategy `normalizeRaw`.

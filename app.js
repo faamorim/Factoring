@@ -180,6 +180,10 @@
         if (stepFilled && !stepCorrect && firstWrongIndex === -1) firstWrongIndex = index;
         return;
       }
+      if (step.inputType === 'radio') {
+        // Radio is handled immediately on click — skip in evaluation pass
+        return;
+      }
       const raw = state.inputValues[step.id]?.raw || '';
       if (raw.trim() !== '' && !compareAnswers(raw, step.expected)) {
         if (firstWrongIndex === -1) firstWrongIndex = index;
@@ -188,6 +192,10 @@
 
     // Pass 2: assign statuses
     workflow.forEach((step, index) => {
+      if (step.inputType === 'radio') {
+        // Status already set by renderer on click — don't override
+        return;
+      }
       if (step.inputType === 'pair') {
         const { stepCorrect, stepFilled, fieldStatuses } = checkPairStep(step);
         Object.assign(state.pairFieldStatuses, fieldStatuses);
@@ -225,10 +233,13 @@
 
     const blankSteps = workflow.filter((step) => {
       if (step.inputType === 'pair') {
-        // Pair steps are blank only if both sub-fields are empty
         const rawA = state.inputValues[`${step.id}-a`]?.raw?.trim();
         const rawB = state.inputValues[`${step.id}-b`]?.raw?.trim();
         return !rawA && !rawB;
+      }
+      if (step.inputType === 'radio') {
+        // Radio step is blank if no selection made, or selection is incorrect
+        return state.stepStatuses[step.id] !== 'correct';
       }
       return !(state.inputValues[step.id]?.raw?.trim());
     });
@@ -320,7 +331,13 @@
       return;
     }
 
+    // Don't solve locked steps (method not identified yet)
+    const identStep = state.currentProblem.workflow.find(s => s.inputType === 'radio');
+    const identCorrect = identStep ? state.stepStatuses[identStep.id] === 'correct' : true;
+
     const nextStep = state.currentProblem.workflow.find((step) => {
+      if (step.inputType === 'radio') return false; // radio handled by renderer
+      if (step.inputType !== 'radio' && identStep && !identCorrect) return false;
       if (step.inputType === 'pair') {
         return !(state.inputValues[`${step.id}-a`]?.raw) || !(state.inputValues[`${step.id}-b`]?.raw);
       }

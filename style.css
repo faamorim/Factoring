@@ -250,6 +250,46 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   50%       { opacity: 0; }
 }
 
+.radio-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.radio-option {
+  padding: 8px 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.radio-option:hover {
+  border-color: var(--accent);
+}
+
+.radio-option.selected-correct {
+  border-color: var(--correct);
+  background: color-mix(in srgb, var(--correct) 12%, transparent);
+  color: var(--correct);
+  font-weight: 600;
+}
+
+.radio-option.selected-incorrect {
+  border-color: var(--incorrect);
+  background: color-mix(in srgb, var(--incorrect) 12%, transparent);
+  color: var(--incorrect);
+}
+
+.guided-step.locked {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 .pair-input-wrap {
   display: grid;
   grid-template-columns: 1fr 1fr;
