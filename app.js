@@ -173,16 +173,16 @@
     const workflow = state.currentProblem.workflow;
     let firstWrongIndex = -1;
 
-    // Pass 1: find the first filled+wrong step
+    // Pass 1: find the first filled+wrong step (skip locked and radio steps)
     workflow.forEach((step, index) => {
+      if (step.gatedBy && state.stepStatuses[step.gatedBy] !== 'correct') return;
       if (step.inputType === 'pair') {
         const { stepCorrect, stepFilled } = checkPairStep(step);
         if (stepFilled && !stepCorrect && firstWrongIndex === -1) firstWrongIndex = index;
         return;
       }
       if (step.inputType === 'radio') {
-        // Radio is handled immediately on click — skip in evaluation pass
-        return;
+        return; // handled on click
       }
       const raw = state.inputValues[step.id]?.raw || '';
       if (raw.trim() !== '' && !compareAnswers(raw, step.expected)) {
@@ -190,11 +190,11 @@
       }
     });
 
-    // Pass 2: assign statuses
+    // Pass 2: assign statuses (skip locked and radio steps)
     workflow.forEach((step, index) => {
+      if (step.gatedBy && state.stepStatuses[step.gatedBy] !== 'correct') return;
       if (step.inputType === 'radio') {
-        // Status already set by renderer on click — don't override
-        return;
+        return; // handled on click
       }
       if (step.inputType === 'pair') {
         const { stepCorrect, stepFilled, fieldStatuses } = checkPairStep(step);
@@ -232,13 +232,14 @@
     });
 
     const blankSteps = workflow.filter((step) => {
+      // Locked steps don't count as blank — student can't fill them yet
+      if (step.gatedBy && state.stepStatuses[step.gatedBy] !== 'correct') return false;
       if (step.inputType === 'pair') {
         const rawA = state.inputValues[`${step.id}-a`]?.raw?.trim();
         const rawB = state.inputValues[`${step.id}-b`]?.raw?.trim();
         return !rawA && !rawB;
       }
       if (step.inputType === 'radio') {
-        // Radio step is blank if no selection made, or selection is incorrect
         return state.stepStatuses[step.id] !== 'correct';
       }
       return !(state.inputValues[step.id]?.raw?.trim());
@@ -331,13 +332,9 @@
       return;
     }
 
-    // Don't solve locked steps (method not identified yet)
-    const identStep = state.currentProblem.workflow.find(s => s.inputType === 'radio');
-    const identCorrect = identStep ? state.stepStatuses[identStep.id] === 'correct' : true;
-
     const nextStep = state.currentProblem.workflow.find((step) => {
-      if (step.inputType === 'radio') return false; // radio handled by renderer
-      if (step.inputType !== 'radio' && identStep && !identCorrect) return false;
+      if (step.inputType === 'radio') return false; // radio handled by renderer on click
+      if (step.gatedBy && state.stepStatuses[step.gatedBy] !== 'correct') return false;
       if (step.inputType === 'pair') {
         return !(state.inputValues[`${step.id}-a`]?.raw) || !(state.inputValues[`${step.id}-b`]?.raw);
       }

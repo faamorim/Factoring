@@ -1227,15 +1227,22 @@ window.Generators = (() => {
       options:   Object.entries(methodNames).map(([value, label]) => ({ value, label }))
     };
 
+    // Add gatedBy to all inner steps so they stay locked until
+    // the identification step is answered correctly
+    const gatedWorkflow = inner.workflow.map(step => ({
+      ...step,
+      gatedBy: 'identify-method'
+    }));
+
     return {
-      id:         `mixed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      method:     'mixed',
+      id:          `mixed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      method:      'mixed',
       innerMethod: method,
       proficiency,
-      expression: inner.expression,
-      answer:     inner.answer,
-      steps:      inner.steps,
-      workflow:   [identStep, ...inner.workflow]
+      expression:  inner.expression,
+      answer:      inner.answer,
+      steps:       inner.steps,
+      workflow:    [identStep, ...gatedWorkflow]
     };
   }
 

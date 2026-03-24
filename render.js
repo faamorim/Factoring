@@ -62,20 +62,17 @@ window.Renderer = (() => {
     const list = document.createElement('div');
     list.className = 'guided-list';
 
-    // For mixed method: steps after identify-method are locked until
-    // the identification step is marked correct
-    const identStep = state.currentProblem.workflow.find(s => s.inputType === 'radio');
-    const identCorrect = identStep
-      ? state.stepStatuses[identStep.id] === 'correct'
-      : true;
-
     state.currentProblem.workflow.forEach((step) => {
       ensureInputRecord(state, step.id);
       const record = state.inputValues[step.id];
       const status = state.stepStatuses[step.id];
 
-      // Lock non-identification steps until method is identified
-      const isLocked = step.inputType !== 'radio' && identStep && !identCorrect;
+      // A step is locked if its gating step hasn't been answered correctly yet.
+      // Locked steps are not rendered at all — hiding them is the point.
+      const isLocked = step.gatedBy
+        ? state.stepStatuses[step.gatedBy] !== 'correct'
+        : false;
+      if (isLocked) return;
 
       const item = document.createElement('div');
       item.className = 'guided-step';
@@ -83,7 +80,6 @@ window.Renderer = (() => {
       if (status === 'correct')   item.classList.add('correct');
       if (status === 'incorrect') item.classList.add('incorrect');
       if (status === 'downstream') item.classList.add('downstream');
-      if (isLocked) item.classList.add('locked');
 
       const label = document.createElement('div');
       label.className = 'step-label';
@@ -108,8 +104,12 @@ window.Renderer = (() => {
               if (opt.value === step.expected) {
                 state.stepStatuses[step.id] = 'correct';
                 render();
-                const nextStep = state.currentProblem.workflow.find(
-                  s => s.id !== step.id && !(state.inputValues[s.id]?.raw?.trim())
+                // Scroll to next visible (non-locked, non-answered) step
+                const nextStep = state.currentProblem.workflow.find(s =>
+                  s.id !== step.id &&
+                  !(s.gatedBy && state.stepStatuses[s.gatedBy] !== 'correct') &&
+                  !(state.inputValues[s.id]?.raw?.trim()) &&
+                  state.stepStatuses[s.id] !== 'correct'
                 );
                 if (nextStep) setTimeout(() => {
                   const el = document.getElementById('workArea');
@@ -170,11 +170,11 @@ window.Renderer = (() => {
         display.addEventListener('click', () => selectInput(state, step.id, render));
 
         item.appendChild(label);
-        if (!isLocked) item.appendChild(display);
+        item.appendChild(display);
       }
 
       // Inline hint, shown only after student requests it
-      if (!isLocked && state.revealedHints?.[step.id]) {
+      if (state.revealedHints?.[step.id]) {
         const hintEl = document.createElement('div');
         hintEl.className = 'step-hint';
         hintEl.innerHTML = `💡 ${rawToPrettyHtml(step.hint)}`;
