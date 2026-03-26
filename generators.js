@@ -3,35 +3,14 @@ window.Generators = (() => {
     buildFromPrimes,
     choice,
     formatFactorPiece,
-    formatLinearFactor,
     formatSecondFactor,
     formatPolynomial,
     gcdList,
-    isLikelyIrreducibleQuadratic,
     isPerfectSquare,
     pickNumbers,
     randInt
   } = window.Utils;
 
-  // ---------------------------------------------------------------------------
-  // isValidGroupingFactors(a, b, c, cXExponent)
-  //
-  // Validates that the values produce a clean standalone grouping problem:
-  //   - gcd(b, c) = 1  — no overall GCF hiding in the full polynomial
-  //   - gcd(a, c) = 1  — second pair GCF is exactly c (or cy), not a multiple
-  //   - not (b=1 and |c|=1)  — avoids trivially simple problems
-  //   - second factor (cx^n + d) must not itself be a DoS — prevents chained
-  //     factoring problems appearing as standalone grouping problems
-  //     (e.g. (x+10)(x²−25) looks like grouping but x²−25 is a DoS)
-  // ---------------------------------------------------------------------------
-  function isValidGroupingFactors(a, b, c, cXExponent = 2) {
-    if (gcdList([Math.abs(b), Math.abs(c)]) !== 1) return false;
-    if (gcdList([Math.abs(a), Math.abs(c)]) !== 1) return false;
-    if (b === 1 && Math.abs(c) === 1) return false;
-    // Second factor is DoS when: cx^(even) + d where d < 0, c and |d| are perfect squares
-    if (cXExponent % 2 === 0 && b < 0 && isPerfectSquare(c) && isPerfectSquare(Math.abs(b))) return false;
-    return true;
-  }
 
   // ---------------------------------------------------------------------------
   // generateGCFLayer({ coeffRange, xExpRange, yExpRange, insideTerms })
@@ -233,19 +212,6 @@ window.Generators = (() => {
     return terms;
   }
 
-  function isValidInsideTerms(terms) {
-    if (!terms || terms.length === 0) return false;
-    // No zero coefficients
-    if (terms.some(t => t.coefficient === 0)) return false;
-    // No shared numeric factor
-    if (gcdList(terms.map(t => Math.abs(t.coefficient))) !== 1) return false;
-    // At least one term with x exponent 0
-    if (!terms.some(t => t.exponent === 0)) return false;
-    // If any term has y, at least one must have no y
-    const hasAnyY = terms.some(t => (t.yExponent || 0) > 0);
-    if (hasAnyY && !terms.some(t => (t.yExponent || 0) === 0)) return false;
-    return true;
-  }
 
   // ---------------------------------------------------------------------------
   // generateGCFProblem(proficiency)
@@ -486,7 +452,8 @@ window.Generators = (() => {
   // ---------------------------------------------------------------------------
   function generateDifferenceOfSquaresProblem(proficiency) {
     // Config table: aRoot range, bRoot range, allowed varExponents, useY
-    // varExponent must always be even (half-exponent appears in each factor)
+    // varExponent is the degree of the expanded expression (must be even —
+    // see roadmap: varExponent semantic rename deferred)
     const configs = {
       emerging:   { aRootRange: [1, 1], bRootRange: [2, 7],  varExponents: [2],       useY: false },
       developing: { aRootRange: [2, 4], bRootRange: [2, 9],  varExponents: [2],       useY: false },
@@ -553,7 +520,7 @@ window.Generators = (() => {
     //
     // Chained factoring prevention: if bRoot is negative AND both aRoot and
     // bRootAbs are perfect squares AND varExponent === 2, the factor (ax ± b)
-    // would itself be a difference of squares — rejected via retry loop.
+    // would itself be a difference of squares — prevented by incrementing bRootAbs.
     const configs = {
       emerging:   { aRootRange: [1, 1], bRootRange: [2, 6],  varExponents: [2],    allowNegativeB: false, allowY: false },
       developing: { aRootRange: [1, 1], bRootRange: [2, 12], varExponents: [2],    allowNegativeB: true,  allowY: false },
@@ -734,9 +701,9 @@ window.Generators = (() => {
   // Covers standalone grouping AND the grouping step inside general trinomials.
   //
   // Expanded: (ax+b)(cx^n+dy^m)
-  //   = acx^(n+1) + bcx^n + adxy^m + bdy^m
+  //   = acx^(n+1) + bcx^n + adx·y^m + bd·y^m    [when aXExponent=1]
   //   First pair:  acx^(n+1) + bcx^n  →  cx^n(ax + b)
-  //   Second pair: adxy^m    + bdy^m  →  dy^m(ax + b)
+  //   Second pair: adx·y^m   + bd·y^m →  dy^m(ax + b)
   //   Common binomial: (ax + b)
   //
   // GCFs are derived via gcd — no hardcoded assumptions about structure.
@@ -1249,10 +1216,6 @@ window.Generators = (() => {
       return methods.map(m => ({ value: m, label: methodLabels[m] }));
     }
 
-    function termCount(terms) {
-      return terms ? terms.length : 0;
-    }
-
     function optionsForMethod(method) {
       if (method === 'dos')      return methodOptions(['dos', 'cant']);
       if (method === 'pst')      return methodOptions(['pst', 'st', 'gt', 'cant']);
@@ -1291,28 +1254,9 @@ window.Generators = (() => {
       return step;
     }
 
-    // Simple yes/no radio (kept for backward compat)
-    function makeRadio(id, label, expected, gatedBy) {
-      const step = {
-        id,
-        inputType: 'radio',
-        label,
-        expected,
-        options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]
-      };
-      if (gatedBy) step.gatedBy = gatedBy;
-      return step;
-    }
-
     // "Write the full expression so far" step
     function makeWritten(id, label, expected, gatedBy) {
       return { id, label, hint: `Rewrite the full expression using all factors found so far.`, expected, gatedBy };
-    }
-
-    // Build cumulative expression string from GCF + factors
-    function buildFullExpr(gcfText, factors) {
-      if (!gcfText) return factors.join('');
-      return `${gcfText}(${factors.join('')})`;
     }
 
     // --- Proficiency configs ---

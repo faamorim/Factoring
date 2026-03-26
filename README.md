@@ -29,6 +29,10 @@ Every problem has a shareable URL — copy the link and anyone gets the exact sa
 | **Difference of Squares** | a²x^2n − b²y² → (ax^n + by)(ax^n − by) |
 | **Perfect Square Trinomial** | a²x^2n ± 2abx^n + b² → (ax^n ± b)² |
 | **Simple Trinomial** | x² + bx + c → (x + p)(x + q), a = 1 |
+| **Grouping** | Four-term polynomials → (ax + b)(cx² + d) |
+| **General Trinomial** | ax² + bx + c → split middle term, group |
+| **Mixed Method** | Student identifies the method before factoring |
+| **Full Factoring** | Multi-step chained problems (GCF → inner method) |
 
 ---
 
@@ -72,7 +76,7 @@ URL format: `?p=method.proficiency.mode.seed`
 
 ## Roadmap
 
-See [ROADMAP.md](https://github.com/faamorim/Factoring/blob/main/ROADMAP.md) for planned generators (Grouping, General Trinomial, Mixed Method, Full Factoring), answer checking improvements, quiz/worksheet generation, and print modes.
+See [ROADMAP.md](https://github.com/faamorim/Factoring/blob/main/ROADMAP.md) for planned features including incremental hints, progress tracking, quiz/worksheet generation, print modes, and extended Full Factoring structures.
 
 ---
 

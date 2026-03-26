@@ -90,21 +90,15 @@ deliberately deferred and why.
   unicode minus, handles implicit multiplication
 - Comma-separated pair input for Simple Trinomial (sorted before
   comparing so order doesn't matter)
+- Factor-order-insensitive comparison (`parseFactors` + `compareFactored`)
+  — splits factored expressions into sorted canonical tokens, so
+  `(x+2)(x-3)` correctly matches `(x-3)(x+2)` everywhere
 
 ### Planned
-- **Factor order normalization** — `(x+2)(x-2)` should match
-  `(x-2)(x+2)`. Parse into a sorted set of factors, compare.
-  Low effort, covers most real-world cases.
-
 - **Term order within factors** — `(x+2)` should match `(2+x)`.
   Sort terms within each factor canonically before comparing.
-
-- **Expression tree comparison** — full canonical form comparison
-  by building a two-level tree: product of sums. Split on `)(` for
-  factors, split on `+`/`-` (keeping sign with term) for terms within
-  each factor. Handles all equivalent forms. Discussed in detail —
-  implementation is tractable because our answer forms are always
-  shallow (2–3 levels deep).
+  Currently not an issue since our generators always write terms
+  in a consistent order, but worth hardening.
 
 ---
 
@@ -185,9 +179,8 @@ deliberately deferred and why.
   Simple and General Trinomial, calls grouping layer internally.
   Supports `xExponent` parameter for trinomials in x² (degree 4).
   ST/GT generators use xExponent=2 at Proficient/Extending (33%).
-- `generateInsideTerms()`, `isValidGroupingFactors()` — validated
-  term/factor generators. Grouping validator rejects second factors
-  that are themselves a DoS (e.g. x²−25).
+- `generateInsideTerms()` — validated inside-term generator,
+  guarantees no shared GCF across coefficients.
 - `pickNumbers(slots, options)` — deterministic number generator.
   Pool-based (not range-trimming). Supports avoidGCD, avoidEqual,
   avoidAllPerfectSquares. Circular scan within pool; prime fallback
@@ -198,8 +191,9 @@ deliberately deferred and why.
 
 ### Planned
 - **`normalizeAnswer(str, method)`** — method-aware normalization
-  that applies factor sorting and term sorting appropriate to the
-  problem type. Replaces the current single-strategy `normalizeRaw`.
+  for remaining edge cases. Factor order is now handled by
+  `compareFactored`. Remaining gap: term order within individual
+  factors (e.g. `(2+x)` vs `(x+2)`).
 
 ---
 

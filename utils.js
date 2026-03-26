@@ -381,7 +381,6 @@ window.Utils = (() => {
     formatFactorPiece,
     formatPolynomial,
     gcdList,
-    isLikelyIrreducibleQuadratic,
     pickNumbers,
     isPerfectSquare,
     compareFactored,
