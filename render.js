@@ -127,6 +127,14 @@ window.Renderer = (() => {
         item.appendChild(label);
         item.appendChild(radioWrap);
 
+        // Inline hint for radio steps
+        if (state.revealedHints?.[step.id] && step.hint) {
+          const hintEl = document.createElement('div');
+          hintEl.className = 'step-hint';
+          hintEl.innerHTML = `💡 ${rawToPrettyHtml(step.hint)}`;
+          item.appendChild(hintEl);
+        }
+
       // Pair steps get two side-by-side input fields, each independently focusable
       } else if (step.inputType === 'pair') {
         const pairWrap = document.createElement('div');

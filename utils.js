@@ -125,6 +125,71 @@ window.Utils = (() => {
       .replace(/\)([0-9a-zA-Z])/g, ')*$1');
   }
 
+  // ---------------------------------------------------------------------------
+  // parseFactors(expr)
+  //
+  // Splits a factored expression into a sorted canonical list of factor tokens.
+  // Handles: leading coefficients/variables, parenthesized factors, ^2 suffix.
+  //   "(x+3)(x-2)"        → ["(x+3)", "(x-2)"] sorted
+  //   "3(x+2)(x-3)"       → ["3", "(x+2)", "(x-3)"] sorted
+  //   "5(x^2+4)(x+2)(x-2)"→ ["(x+2)", "(x-2)", "(x^2+4)", "5"] sorted
+  //   "(x+2)^2"           → ["(x+2)^2"]
+  // Used by compareAnswers for factored-form steps.
+  // ---------------------------------------------------------------------------
+  function parseFactors(expr) {
+    const s = expr.replace(/\s+/g, '').replace(/−/g, '-');
+    const tokens = [];
+    let i = 0;
+    while (i < s.length) {
+      if (s[i] === '(') {
+        // Find matching close paren
+        let depth = 0, j = i;
+        while (j < s.length) {
+          if (s[j] === '(') depth++;
+          else if (s[j] === ')') { depth--; if (depth === 0) break; }
+          j++;
+        }
+        let token = s.slice(i, j + 1);
+        // Include ^n suffix if present
+        let k = j + 1;
+        if (k < s.length && s[k] === '^') {
+          k++;
+          while (k < s.length && s[k] >= '0' && s[k] <= '9') k++;
+          token = s.slice(i, k);
+          j = k - 1;
+        }
+        tokens.push(token);
+        i = j + 1;
+      } else {
+        // Leading coefficient/variable up to next '('
+        let j = i;
+        while (j < s.length && s[j] !== '(') j++;
+        if (j > i) tokens.push(s.slice(i, j));
+        i = j;
+      }
+    }
+    return tokens.sort();
+  }
+
+  // ---------------------------------------------------------------------------
+  // compareFactored(student, expected)
+  //
+  // Compares two factored expressions canonically — factor order doesn't matter.
+  // Falls back to exact normalizeRaw comparison if parsing produces no tokens
+  // (e.g. for intermediate steps that aren't fully factored products).
+  // ---------------------------------------------------------------------------
+  function compareFactored(student, expected) {
+    const sTokens = parseFactors(student);
+    const eTokens = parseFactors(expected);
+    // Only use token comparison if both parsed into multiple factors
+    // (single token means it's probably not a factored product)
+    if (sTokens.length > 1 || eTokens.length > 1) {
+      return sTokens.length === eTokens.length &&
+             sTokens.every((t, i) => normalizeRaw(t) === normalizeRaw(eTokens[i]));
+    }
+    return normalizeRaw(student) === normalizeRaw(expected);
+  }
+
   function isPerfectSquare(n) {
     if (n < 0) return false;
     const root = Math.round(Math.sqrt(n));
@@ -319,6 +384,7 @@ window.Utils = (() => {
     isLikelyIrreducibleQuadratic,
     pickNumbers,
     isPerfectSquare,
+    compareFactored,
     normalizeRaw,
     randInt,
     rawToPretty

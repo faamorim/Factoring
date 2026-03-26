@@ -1233,7 +1233,65 @@ window.Generators = (() => {
       return steps.map(s => ({ ...s, id: `${prefix}-${s.id}`, gatedBy: gateId }));
     }
 
-    // Yes/No radio step
+    // Method-specific radio step for "can X be factored further?"
+    // For GCF check: options are yes/no
+    // For all others: options are the applicable method + "Can't be factored further"
+    const methodLabels = {
+      dos:      'Difference of Squares',
+      pst:      'Perfect Square Trinomial',
+      st:       'Simple Trinomial',
+      gt:       'General Trinomial',
+      grouping: 'Grouping',
+      cant:     "Can't be factored further"
+    };
+
+    function methodOptions(methods) {
+      return methods.map(m => ({ value: m, label: methodLabels[m] }));
+    }
+
+    function termCount(terms) {
+      return terms ? terms.length : 0;
+    }
+
+    function optionsForMethod(method) {
+      if (method === 'dos')      return methodOptions(['dos', 'cant']);
+      if (method === 'pst')      return methodOptions(['pst', 'st', 'gt', 'cant']);
+      if (method === 'st')       return methodOptions(['pst', 'st', 'gt', 'cant']);
+      if (method === 'gt')       return methodOptions(['pst', 'st', 'gt', 'cant']);
+      if (method === 'grouping') return methodOptions(['grouping', 'cant']);
+      return methodOptions(['dos', 'pst', 'st', 'gt', 'grouping', 'cant']);
+    }
+
+    function makeGCFRadio(id, expected, gatedBy) {
+      const step = {
+        id,
+        inputType: 'radio',
+        label: 'Is there a GCF (other than 1)?',
+        expected,
+        hint: 'Look at the coefficients of all terms. What is their GCF? Also check for any variable (x or y) that appears in every term.',
+        options: [{ value: 'yes', label: 'Yes — factor out the GCF' }, { value: 'no', label: 'No GCF (other than 1)' }]
+      };
+      if (gatedBy) step.gatedBy = gatedBy;
+      return step;
+    }
+
+    function makeMethodRadio(id, expr, method, isFactorable, gatedBy) {
+      const hint = isFactorable
+        ? `Count the terms in ${expr}. For 2 terms check if it's a difference of squares. For 3 terms check if it's a perfect square, then check the leading coefficient. For 4 terms try grouping.`
+        : `${expr} cannot be factored further over the integers. Check: is it a difference of squares? (both terms perfect squares with a minus sign) If not, it can't be factored.`;
+      const step = {
+        id,
+        inputType: 'radio',
+        label: `How can ${expr} be factored?`,
+        expected: isFactorable ? method : 'cant',
+        hint,
+        options: isFactorable ? optionsForMethod(method) : optionsForMethod(method)
+      };
+      if (gatedBy) step.gatedBy = gatedBy;
+      return step;
+    }
+
+    // Simple yes/no radio (kept for backward compat)
     function makeRadio(id, label, expected, gatedBy) {
       const step = {
         id,
@@ -1361,13 +1419,15 @@ window.Generators = (() => {
 
     // Build inner layer
     if (structure.includes('dos-dos')) {
-      // Inner DoS (pure, varExponent=2), then outer DoS uses its terms scaled up
-      const inner = pickDoS('developing');
-      innerLayer  = inner;
+      // Inner DoS at base exponent, outer DoS squares the roots and doubles the exponent.
+      // outer rightFactor = aRoot²x^varExp - bRoot² = inner.expression ✓
+      // outer leftFactor  = aRoot²x^varExp + bRoot² (irreducible sum of squares) ✓
+      const cfg = dosConfigs['developing'];
+      const [aRoot, bRoot] = pickNumbers([cfg.aRootRange, cfg.bRootRange], { avoidGCD: true });
+      const varExp = choice(cfg.varExponents);
+      innerLayer = generateDoSLayer({ aRoot, bRoot, varExponent: varExp, useY: false });
       innerMethod = 'dos';
-      // Outer DoS: scale innerTerms up by squaring — (x²+a²)(x²-a²) from x^4-a^4
-      // innerTerms are [a²x², -b²], so outer DoS has aRoot=inner.aRoot, bRoot=inner.bRoot, varExponent=4
-      outerLayer  = generateDoSLayer({ aRoot: inner.aRoot, bRoot: inner.bRoot, varExponent: inner.varExponent * 2, useY: false });
+      outerLayer  = generateDoSLayer({ aRoot: aRoot * aRoot, bRoot: bRoot * bRoot, varExponent: varExp * 2, useY: false });
       outerMethod = 'dos';
     } else if (structure.includes('grp-dos')) {
       // Grouping where second factor is a DoS: (x+a)(x²-b²)
@@ -1451,12 +1511,7 @@ window.Generators = (() => {
 
     // Step 1: GCF check (always first)
     const gcfRadioId = 'ff-gcf-check';
-    workflow.push(makeRadio(
-      gcfRadioId,
-      'Is there a GCF (other than 1)?',
-      hasGCF ? 'yes' : 'no',
-      null  // first step, no gate
-    ));
+    workflow.push(makeGCFRadio(gcfRadioId, hasGCF ? 'yes' : 'no', null));
 
     let lastGateId = gcfRadioId;
 
@@ -1488,12 +1543,7 @@ window.Generators = (() => {
     if (twoStep && outerLayer) {
       const outerExprToFactor = gcfLayer ? gcfLayer.insideExpression : outerExpr;
       const outerRadioId = 'ff-outer-check';
-      workflow.push(makeRadio(
-        outerRadioId,
-        `Can ${outerExprToFactor} be factored further?`,
-        'yes',
-        lastGateId
-      ));
+      workflow.push(makeMethodRadio(outerRadioId, outerExprToFactor, outerMethod, true, lastGateId));
       lastGateId = outerRadioId;
 
       // Outer layer steps
@@ -1527,22 +1577,36 @@ window.Generators = (() => {
     }
 
     // Step 3: Inner layer check — can the inner factor be factored further?
-    const innerExprToCheck = twoStep
-      ? innerLayer.expression  // the inner DoS factor
-      : (gcfLayer ? gcfLayer.insideExpression : innerLayer.expression);
+    // For dos-dos: the factorable factor is outerLayer.rightFactor (e.g. 3x²-4)
+    // not innerLayer.expression (e.g. 9x²-16, which is the pre-outer expression)
+    const innerExprToCheck = (structure.includes('dos-dos') && outerLayer)
+      ? outerLayer.rightFactor
+      : twoStep
+        ? innerLayer.expression
+        : (gcfLayer ? gcfLayer.insideExpression : innerLayer.expression);
 
     // Only ask about inner if it's degree >= 2
     const innerTermsArr = innerLayer.innerTerms || innerLayer.trinomialTerms || innerLayer.terms || [];
     const maxExp = Math.max(...innerTermsArr.map(t => t.exponent || 0));
 
     if (maxExp >= 2) {
+      // For dos-dos: the outer DoS produces two factors. The "sum" factor (x²+a²)
+      // is irreducible — ask about it first, then ask about the factorable DoS factor.
+      if (structure.includes('dos-dos') && outerLayer) {
+        // outerLayer is a DoS: answer = (x²+a²)(x²-a²)
+        // First factor is irreducible sum of squares
+        const sumFactor = `${outerLayer.aRootTermText}² + ${outerLayer.bRootTermText}²`
+          .replace('undefined²', outerLayer.expression.split('+')[0].trim())
+          || `(${outerLayer.leftFactor})`;
+        // Get the sum-of-squares expression from the outer DoS left factor
+        const irreducibleExpr = outerLayer.leftFactor || outerLayer.factor1;
+        const irreducibleRadioId = 'ff-irreducible-check';
+        workflow.push(makeMethodRadio(irreducibleRadioId, irreducibleExpr, 'dos', false, lastGateId));
+        lastGateId = irreducibleRadioId;
+      }
+
       const innerRadioId = 'ff-inner-check';
-      workflow.push(makeRadio(
-        innerRadioId,
-        `Can ${innerExprToCheck} be factored further?`,
-        'yes',
-        lastGateId
-      ));
+      workflow.push(makeMethodRadio(innerRadioId, innerExprToCheck, innerMethod, true, lastGateId));
       lastGateId = innerRadioId;
 
       // Inner layer steps

@@ -30,6 +30,13 @@ deliberately deferred and why.
   Emerging: GCF + [DoS|PST|ST]. Developing: GCF + [DoS|PST|ST|GT].
   Proficient: GCF + inner OR two-step no-GCF [DoS→DoS | Grp→DoS].
   Extending: GCF + two-step inner.
+  Method identification radios use method-specific options (not yes/no)
+  so students identify the technique, not just confirm factorability.
+  Known gaps (planned extensions):
+  - Degree-4 PST: (x²±a)² not yet a FF structure
+  - GT→DoS chain: x⁴+Bx²+C factoring into (x²+p)(x²+q) where each
+    factor is a DoS — GT step exists but follow-up DoS steps are not
+    generated. Needs new structure type and extended workflow builder.
 
 ### Planned — in curriculum order
 
@@ -45,6 +52,25 @@ deliberately deferred and why.
 
 - **Negative leading coefficients** — changes the workflow steps
   (factor out −1 first). Future feature.
+
+- **Irreducible lookalikes** — generate intentionally-unfactorable expressions
+  that resemble factorable ones, for use in Mixed/FF identification steps at
+  Proficient/Extending. Three strategies for DoS lookalikes:
+  1. Odd exponent (x³−9) — exponent not even, so not a perfect square
+  2. Sum instead of difference (x²+9) — sum of squares is irreducible
+  3. Non-perfect-square coefficient/constant (8x²−25, 4x²−45) — coefficients
+     not perfect squares. Increment factor by 1..2×original to stay just below
+     next perfect square.
+  Layer returns no factoring steps/workflow; caller handles "can't factor"
+  identification. Each layer (DoS, PST, trinomial) would need its own
+  lookalike strategy. Low probability trigger (10-15%) at appropriate levels.
+
+- **varExponent semantic rename** — currently means the degree of the
+  expanded expression (must be even). Should mean the exponent of the
+  root variable (half current value), so odd values work naturally.
+  Purely mechanical rename: halve all config values and call sites,
+  remove the /2 inside the layers. Zero functional change for current
+  even-only cases.
 
 - **pickNumbers backtracking** — if all slots fail constraints, could
   backtrack and re-generate earlier slots. Currently uses prime fallback

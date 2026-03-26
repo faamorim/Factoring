@@ -1,5 +1,5 @@
 (() => {
-  const { normalizeRaw, rawToPretty, generateSeed, setSeed, clearSeed } = window.Utils;
+  const { compareFactored, normalizeRaw, rawToPretty, generateSeed, setSeed, clearSeed } = window.Utils;
   const { generateProblem } = window.Generators;
   const { insertIntoActiveInput } = window.InputController;
   const {
@@ -56,6 +56,11 @@
   }
 
   function compareAnswers(studentRaw, expectedRaw) {
+    // Use factor-order-insensitive comparison when the expected answer
+    // looks like a factored product (contains parentheses)
+    if (expectedRaw && expectedRaw.includes('(')) {
+      return compareFactored(studentRaw, expectedRaw);
+    }
     return normalizeRaw(studentRaw) === normalizeRaw(expectedRaw);
   }
 
@@ -333,8 +338,8 @@
     }
 
     const nextStep = state.currentProblem.workflow.find((step) => {
-      if (step.inputType === 'radio') return false; // radio handled by renderer on click
       if (step.gatedBy && state.stepStatuses[step.gatedBy] !== 'correct') return false;
+      if (step.inputType === 'radio') return state.stepStatuses[step.id] !== 'correct';
       if (step.inputType === 'pair') {
         return !(state.inputValues[`${step.id}-a`]?.raw) || !(state.inputValues[`${step.id}-b`]?.raw);
       }
@@ -345,7 +350,12 @@
       return;
     }
 
-    if (nextStep.inputType === 'pair') {
+    if (nextStep.inputType === 'radio') {
+      // Auto-answer radio step with the correct option
+      const correctOpt = nextStep.options.find(o => o.value === nextStep.expected);
+      state.inputValues[nextStep.id] = { raw: nextStep.expected, display: correctOpt?.label || nextStep.expected };
+      state.stepStatuses[nextStep.id] = 'correct';
+    } else if (nextStep.inputType === 'pair') {
       const [valA, valB] = nextStep.expected.split(',').map(s => s.trim());
       state.inputValues[`${nextStep.id}-a`] = { raw: valA, display: rawToPretty(valA) };
       state.inputValues[`${nextStep.id}-b`] = { raw: valB, display: rawToPretty(valB) };
@@ -366,7 +376,10 @@
     }
 
     state.currentProblem.workflow.forEach((step) => {
-      if (step.inputType === 'pair') {
+      if (step.inputType === 'radio') {
+        const correctOpt = step.options?.find(o => o.value === step.expected);
+        state.inputValues[step.id] = { raw: step.expected, display: correctOpt?.label || step.expected };
+      } else if (step.inputType === 'pair') {
         const [valA, valB] = step.expected.split(',').map(s => s.trim());
         state.inputValues[`${step.id}-a`] = { raw: valA, display: rawToPretty(valA) };
         state.inputValues[`${step.id}-b`] = { raw: valB, display: rawToPretty(valB) };
