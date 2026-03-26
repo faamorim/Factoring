@@ -9,6 +9,7 @@ window.Generators = (() => {
     gcdList,
     isLikelyIrreducibleQuadratic,
     isPerfectSquare,
+    pickNumbers,
     randInt
   } = window.Utils;
 
@@ -184,56 +185,50 @@ window.Generators = (() => {
     yExpRange = [1, 2]
   }) {
     let terms;
-    let attempts = 0;
 
-    do {
-      attempts++;
-      if (attempts > 200) break;
-
-      if (termCount === 2) {
-        const c1 = randInt(1, 8);
-        const c2 = randInt(1, 8) * (allowNegative ? choice([1, -1]) : 1);
-        const xExp = randInt(xExpRange[0], xExpRange[1]);
-        terms = [
-          { coefficient: c1, exponent: xExp },
-          { coefficient: c2, exponent: 0 }
-        ];
-        // Optionally add y to first term only — constant term has no y
-        if (allowY && choice([true, false])) {
-          terms[0].yExponent = randInt(yExpRange[0], yExpRange[1]);
-        }
-
-      } else {
-        const a = randInt(1, 5);
-        const b = randInt(1, 8) * (allowNegative ? choice([1, -1]) : 1);
-        const c = randInt(1, 6) * (allowNegative ? choice([1, -1]) : 1);
-        const leadExp = randInt(xExpRange[0], xExpRange[1]);
-        const midExp  = leadExp > 1 ? randInt(1, leadExp - 1) : 1;
-        terms = [
-          { coefficient: a, exponent: leadExp },
-          { coefficient: b, exponent: midExp },
-          { coefficient: c, exponent: 0 }
-        ];
-        // Optionally add y to some (not all) terms.
-        // Each term independently gets a y exponent. Only constraint: at least
-        // one term must end up with no y (so y can't be a common factor).
-        // This naturally covers all 6 patterns: 1, 2, 3, 1&2, 1&3, 2&3.
-        if (allowY && choice([true, false])) {
-          for (const term of terms) {
-            if (choice([true, false])) {
-              term.yExponent = randInt(yExpRange[0], yExpRange[1]);
-            }
-          }
-          // Guarantee at least one term has no y — clear a random term's y if needed
-          if (terms.every(t => (t.yExponent || 0) > 0)) {
-            terms[randInt(0, terms.length - 1)].yExponent = 0;
-          }
-        }
+    if (termCount === 2) {
+      // Generate two coefficients with no shared GCF
+      const xExp = randInt(xExpRange[0], xExpRange[1]);
+      const [c1, c2Raw] = pickNumbers([[1, 8], [1, 8]], { avoidGCD: true });
+      const c2 = c2Raw * (allowNegative ? choice([1, -1]) : 1);
+      terms = [
+        { coefficient: c1, exponent: xExp },
+        { coefficient: c2, exponent: 0 }
+      ];
+      // Optionally add y to first term only — constant term has no y
+      if (allowY && choice([true, false])) {
+        terms[0].yExponent = randInt(yExpRange[0], yExpRange[1]);
       }
 
-      terms.sort((a, b) => b.exponent - a.exponent);
+    } else {
+      // Three terms: generate coefficients with no shared GCF
+      const leadExp = randInt(xExpRange[0], xExpRange[1]);
+      const midExp  = leadExp > 1 ? randInt(1, leadExp - 1) : 1;
+      const [a, bRaw, cRaw] = pickNumbers([[1, 5], [1, 8], [1, 6]], { avoidGCD: true });
+      const b = bRaw * (allowNegative ? choice([1, -1]) : 1);
+      const c = cRaw * (allowNegative ? choice([1, -1]) : 1);
+      terms = [
+        { coefficient: a, exponent: leadExp },
+        { coefficient: b, exponent: midExp },
+        { coefficient: c, exponent: 0 }
+      ];
+      // Optionally add y to some (not all) terms.
+      // Each term independently gets a y exponent. Only constraint: at least
+      // one term must end up with no y (so y can't be a common factor).
+      if (allowY && choice([true, false])) {
+        for (const term of terms) {
+          if (choice([true, false])) {
+            term.yExponent = randInt(yExpRange[0], yExpRange[1]);
+          }
+        }
+        // Guarantee at least one term has no y — clear a random term's y if needed
+        if (terms.every(t => (t.yExponent || 0) > 0)) {
+          terms[randInt(0, terms.length - 1)].yExponent = 0;
+        }
+      }
+    }
 
-    } while (!isValidInsideTerms(terms));
+    terms.sort((a, b) => b.exponent - a.exponent);
 
     return terms;
   }
@@ -510,8 +505,8 @@ window.Generators = (() => {
       bRoot = randInt(4, 11);
     }
     // Extending: avoid aRoot === bRoot (trivial-looking problems)
-    if (proficiency === 'extending') {
-      while (bRoot === aRoot) bRoot = randInt(config.bRootRange[0], config.bRootRange[1]);
+    if (proficiency === 'extending' && bRoot === aRoot) {
+      bRoot = bRoot < config.bRootRange[1] ? bRoot + 1 : bRoot - 1;
     }
 
     const layer = generateDoSLayer({ aRoot, bRoot, varExponent, useY });
@@ -680,16 +675,10 @@ window.Generators = (() => {
     const config = configs[proficiency];
     const signMode = choice(config.signs);
 
-    // Only retry for pAbs === qAbs — maxFactor ceiling is guaranteed by
-    // buildFromPrimes in utils.js. Safety fallback for the degenerate case.
-    let pAbs, qAbs;
-    let attempts = 0;
-    do {
-      pAbs = buildFromPrimes(config.pool, config.maxPrimeCount, config.maxFactor);
-      qAbs = buildFromPrimes(config.pool, config.maxPrimeCount, config.maxFactor);
-      attempts++;
-      if (attempts > 50) { pAbs = 2; qAbs = 3; break; }
-    } while (pAbs === qAbs);
+    // Generate two distinct roots — if equal, increment the smaller one.
+    let pAbs = buildFromPrimes(config.pool, config.maxPrimeCount, config.maxFactor);
+    let qAbs = buildFromPrimes(config.pool, config.maxPrimeCount, config.maxFactor);
+    if (pAbs === qAbs) qAbs = qAbs + 1;
 
     // Apply signs — for mixed, randomly decide which factor is negative so
     // b can be either positive or negative, forcing students to read the sign carefully
@@ -711,11 +700,14 @@ window.Generators = (() => {
 
     // Route through generateTrinomialLayer with pinned values.
     // aRange=[1,1] and cRange=[1,1] keeps leading coefficient at 1 (simple trinomial).
+    // At proficient/extending: 33% chance of xExponent=2 (trinomial in x²)
     // skipValidation=true because p,q are already validated above.
+    const xExp = (['proficient', 'extending'].includes(proficiency) && choice([true, false, false]))
+      ? 2 : 1;
     const layer = generateTrinomialLayer({
       aRange: [1, 1], bRange: [p, p], allowNegativeB: false,
       cRange: [1, 1], dRange: [q, q], allowNegativeD: false,
-      skipValidation: true
+      skipValidation: true, xExponent: xExp
     });
 
     return {
@@ -766,16 +758,41 @@ window.Generators = (() => {
     dRange,                  allowNegativeD = false, dYExponent = 0,
     skipValidation = false   // set true when passing pinned values already known to be valid
   }) {
-    // Generate a, b, c, d — retry until valid (skip when values are pinned externally)
-    let a, b, c, d, attempts = 0;
-    do {
-      attempts++;
-      if (attempts > 200) { a = 1; b = 2; c = 1; d = 3; break; }
+    // Generate a, b, c, d deterministically.
+    // When skipValidation=true (pinned external values), use ranges directly.
+    let a, b, c, d;
+    if (skipValidation) {
       a = randInt(aRange[0], aRange[1]) * (allowNegativeA ? choice([1, -1]) : 1);
       b = randInt(bRange[0], bRange[1]) * (allowNegativeB ? choice([1, -1]) : 1);
       c = randInt(cRange[0], cRange[1]);
       d = randInt(dRange[0], dRange[1]) * (allowNegativeD ? choice([1, -1]) : 1);
-    } while (!skipValidation && (b === 0 || d === 0 || !isValidGroupingFactors(b, c, d, cXExponent)));
+    } else {
+      // a: free (it's the constant in the linear factor, no constraints against others)
+      a = randInt(aRange[0], aRange[1]);
+
+      // c: free (x-coefficient of second factor)
+      c = randInt(cRange[0], cRange[1]);
+
+      // b: must not share GCF with c (so second pair GCF is exactly d, not a multiple)
+      // avoidEqual prevents b=c=1 (trivial case)
+      const [, bRaw] = pickNumbers([[c, c], bRange], { avoidGCD: true, avoidEqual: true });
+      b = bRaw;
+
+      // d: must not share GCF with b (so (cx^n+dy^m) has no GCF)
+      // Also must not share GCF with a (so no overall GCF in full polynomial)
+      // DoS prevention: if cXExponent is even, d must not be a negative perfect square
+      // avoidAllPerfectSquares handles this when we later flip sign
+      const [, dRaw] = pickNumbers([[b * a, b * a], dRange], {
+        avoidGCD: true,
+        avoidAllPerfectSquares: cXExponent % 2 === 0
+      });
+      d = dRaw;
+
+      // Apply signs after generation (all pickNumbers values are positive)
+      a *= allowNegativeA ? choice([1, -1]) : 1;
+      b *= allowNegativeB ? choice([1, -1]) : 1;
+      d *= allowNegativeD ? choice([1, -1]) : 1;
+    }
 
     // Build four terms: (ax+b)(cx^n+dy^m)
     // = acx^(n+aXExp) + bcx^n + adx^aXExp·y^dYExp + bd·y^dYExp
@@ -960,26 +977,47 @@ window.Generators = (() => {
   function generateTrinomialLayer({
     aRange, bRange, cRange, dRange,
     allowNegativeB = false, allowNegativeD = false,
-    skipValidation = false
+    skipValidation = false,
+    xExponent = 1
   }) {
     const couldBeGeneral = aRange[1] > 1 || cRange[1] > 1;
 
-    // Generate factors — retry until no hidden GCF in trinomial
-    let a, b, c, d, attempts = 0;
-    do {
-      attempts++;
-      if (attempts > 200) { a = 1; b = 2; c = 1; d = 3; break; }
+    // Generate factors deterministically using pool-based pickNumbers.
+    // When skipValidation=true (pinned external values), use ranges directly.
+    let a, b, c, d;
+    if (skipValidation) {
       a = randInt(aRange[0], aRange[1]);
       b = randInt(bRange[0], bRange[1]) * (allowNegativeB ? choice([1, -1]) : 1);
       c = randInt(cRange[0], cRange[1]);
       d = randInt(dRange[0], dRange[1]) * (allowNegativeD ? choice([1, -1]) : 1);
-    } while (!skipValidation && (
-      b === 0 || d === 0 ||
-      gcdList([Math.abs(a * c), Math.abs(a * d + b * c), Math.abs(b * d)]) !== 1 ||
-      (a * d) === (b * c) ||
-      (a * d) === -(b * c)
-    ));
+    } else {
+      // a: free
+      a = randInt(aRange[0], aRange[1]);
 
+      // c: free
+      c = randInt(cRange[0], cRange[1]);
+
+      // b: must not share GCF with a (so (ax+b) has no GCF)
+      //    must not share GCF with c (so gcd(ac,bd)=1 — see algebraic proof)
+      //    avoidAllPerfectSquares when xExponent even (prevents DoS-in-disguise)
+      const [,, bRaw] = pickNumbers([[a, a], [c, c], bRange], {
+        avoidGCD: true,
+        avoidAllPerfectSquares: xExponent % 2 === 0
+      });
+
+      // d: must not share GCF with a*c (ensures gcd(A,C)=1)
+      //    d_bad = bc/a would make p=q (PST) — exclude it
+      //    avoidAllPerfectSquares for DoS-in-disguise prevention
+      const d_bad = (bRaw * c) % a === 0 ? (bRaw * c) / a : null;
+      const [, dRaw] = pickNumbers(
+        [[a * c, a * c], { range: dRange, exclude: d_bad !== null ? [d_bad] : [] }],
+        { avoidGCD: true, avoidAllPerfectSquares: xExponent % 2 === 0 }
+      );
+
+      // Apply signs after generation (pickNumbers returns positive values)
+      b = bRaw * (allowNegativeB ? choice([1, -1]) : 1);
+      d = dRaw * (allowNegativeD ? choice([1, -1]) : 1);
+    }
     // Trinomial coefficients
     const A = a * c;
     const B = a * d + b * c;
@@ -989,16 +1027,16 @@ window.Generators = (() => {
 
     // Trinomial terms (for chaining into GCF layer)
     const trinomialTerms = [
-      { coefficient: A, exponent: 2 },
-      { coefficient: B, exponent: 1 },
+      { coefficient: A, exponent: 2 * xExponent },
+      { coefficient: B, exponent: xExponent },
       { coefficient: C, exponent: 0 }
     ];
 
     const expression = formatPolynomial(trinomialTerms);
 
     // Factor strings for answer and hints
-    const factor1 = formatSecondFactor(a, 1, b, 0);  // ax + b
-    const factor2 = formatSecondFactor(c, 1, d, 0);  // cx + d
+    const factor1 = formatSecondFactor(a, xExponent, b, 0);  // ax^n + b
+    const factor2 = formatSecondFactor(c, xExponent, d, 0);  // cx^n + d
     const answer  = `(${factor1})(${factor2})`;
 
     // --- Workflow steps 1-5 (identification + pair finding) ---
@@ -1007,10 +1045,11 @@ window.Generators = (() => {
 
     // Step: identify A (only if could be general)
     if (couldBeGeneral) {
+      const leadingVarText = xExponent === 1 ? 'x²' : `x^${2 * xExponent}`;
       workflow.push({
         id: 'identify-a',
-        label: 'Identify the coefficient of x²',
-        hint: `Look at the first term. What number multiplies x²?`,
+        label: `Identify the coefficient of ${leadingVarText}`,
+        hint: `Look at the first term. What number multiplies ${leadingVarText}?`,
         expected: String(A)
       });
     }
@@ -1091,11 +1130,11 @@ window.Generators = (() => {
       // allowNegative flags must be false when passing pinned values — the sign
       // is already baked into the value, and the flag would randomly flip it.
       const groupLayer = generateGroupingLayer({
-        aRange: [c, c], aXExponent: 1, allowNegativeA: false,
-        bRange: [d, d],                allowNegativeB: false,
-        cRange: [a, a], cXExponent: 1,
-        dRange: [b, b],                allowNegativeD: false, dYExponent: 0,
-        skipValidation: true   // values come from trinomial generator, already valid
+        aRange: [c, c], aXExponent: xExponent, allowNegativeA: false,
+        bRange: [d, d],                         allowNegativeB: false,
+        cRange: [a, a], cXExponent: xExponent,
+        dRange: [b, b],                         allowNegativeD: false, dYExponent: 0,
+        skipValidation: true
       });
 
       const splitExpr = groupLayer.expression;
@@ -1150,6 +1189,8 @@ window.Generators = (() => {
     };
 
     const config = configs[proficiency];
+    // At extending: 33% chance of xExponent=2 (general trinomial in x²)
+    if (proficiency === 'extending' && choice([true, false, false])) config.xExponent = 2;
     const layer  = generateTrinomialLayer(config);
 
     return {
@@ -1163,6 +1204,389 @@ window.Generators = (() => {
     };
   }
 
+
+
+  // ---------------------------------------------------------------------------
+  // generateFullFactoringProblem(proficiency)
+  //
+  // Chains multiple factoring layers into a single "factor completely" problem.
+  // Workflow is flat but progressively revealed via gatedBy links.
+  //
+  // Proficiency structures:
+  //   emerging:   GCF + [DoS | PST | ST]
+  //   developing: GCF + [DoS | PST | ST | GT]
+  //   proficient: GCF + [DoS | PST | GT] OR two-step no-GCF [DoS→DoS | Grp→DoS]
+  //   extending:  GCF + two-step inner OR three-step [DoS→DoS with GCF]
+  //
+  // Generation strategy (backwards):
+  //   1. Generate innermost layer → innerTerms
+  //   2. Optionally compose with outer layer using innerTerms
+  //   3. Optionally wrap everything with GCFLayer
+  //   4. Build flat workflow with gatedBy links
+  // ---------------------------------------------------------------------------
+  function generateFullFactoringProblem(proficiency) {
+
+    // --- Helpers ---
+
+    // Prefix all step ids and add gatedBy
+    function gateSteps(steps, gateId, prefix) {
+      return steps.map(s => ({ ...s, id: `${prefix}-${s.id}`, gatedBy: gateId }));
+    }
+
+    // Yes/No radio step
+    function makeRadio(id, label, expected, gatedBy) {
+      const step = {
+        id,
+        inputType: 'radio',
+        label,
+        expected,
+        options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]
+      };
+      if (gatedBy) step.gatedBy = gatedBy;
+      return step;
+    }
+
+    // "Write the full expression so far" step
+    function makeWritten(id, label, expected, gatedBy) {
+      return { id, label, hint: `Rewrite the full expression using all factors found so far.`, expected, gatedBy };
+    }
+
+    // Build cumulative expression string from GCF + factors
+    function buildFullExpr(gcfText, factors) {
+      if (!gcfText) return factors.join('');
+      return `${gcfText}(${factors.join('')})`;
+    }
+
+    // --- Proficiency configs ---
+    const gcfRanges = {
+      emerging:   { coeffRange: [2, 6],  xExpRange: [0, 0] },
+      developing: { coeffRange: [2, 8],  xExpRange: [0, 1] },
+      proficient: { coeffRange: [2, 12], xExpRange: [0, 1] },
+      extending:  { coeffRange: [2, 12], xExpRange: [0, 1] }
+    };
+
+    const innerRanges = {
+      emerging:   'emerging',
+      developing: 'developing',
+      proficient: 'developing',
+      extending:  'proficient'
+    };
+
+    // --- Pick structure ---
+    const structures = {
+      emerging:   ['gcf-dos', 'gcf-pst', 'gcf-st', 'gcf-st', 'gcf-dos'],
+      developing: ['gcf-dos', 'gcf-pst', 'gcf-st', 'gcf-gt', 'gcf-dos', 'gcf-pst'],
+      proficient: ['gcf-dos', 'gcf-pst', 'gcf-gt', 'dos-dos', 'grp-dos'],
+      extending:  ['gcf-dos-dos', 'gcf-grp-dos', 'gcf-gt', 'dos-dos', 'grp-dos']
+    };
+
+    const structure = choice(structures[proficiency]);
+    const innerProf = innerRanges[proficiency];
+    const workflow  = [];
+    const steps     = [];
+
+    // Track factors and GCF for "written so far" steps
+    let gcfText        = null;
+    let gcfInsideExpr  = null;
+    let fullExpression = null;
+    let finalAnswer    = null;
+
+    // -------------------------------------------------------------------------
+    // Build inner layer based on structure
+    // -------------------------------------------------------------------------
+
+    // DoS inner configs per proficiency
+    const dosConfigs = {
+      emerging:   { aRootRange:[1,1], bRootRange:[2,6],  varExponents:[2],    useY:false },
+      developing: { aRootRange:[2,3], bRootRange:[2,8],  varExponents:[2],    useY:false },
+      proficient: { aRootRange:[1,3], bRootRange:[2,9],  varExponents:[2,4],  useY:false },
+    };
+    const pstConfigs = {
+      emerging:   { aRootRange:[1,1], bRootRange:[2,5],  varExponents:[2],    allowNegativeB:false, allowY:false },
+      developing: { aRootRange:[1,2], bRootRange:[2,8],  varExponents:[2],    allowNegativeB:true,  allowY:false },
+      proficient: { aRootRange:[1,3], bRootRange:[2,7],  varExponents:[2],    allowNegativeB:true,  allowY:false },
+    };
+    const stConfigs = {
+      emerging:   { aRange:[1,1], bRange:[2,5],  cRange:[1,1], dRange:[2,5],  allowNegativeB:false, allowNegativeD:false },
+      developing: { aRange:[1,1], bRange:[2,8],  cRange:[1,1], dRange:[2,8],  allowNegativeB:true,  allowNegativeD:true  },
+      proficient: { aRange:[1,1], bRange:[2,10], cRange:[1,1], dRange:[2,10], allowNegativeB:true,  allowNegativeD:true  },
+    };
+    const gtConfigs = {
+      developing: { aRange:[2,3], bRange:[1,6],  cRange:[2,3], dRange:[1,6],  allowNegativeB:true, allowNegativeD:true },
+      proficient: { aRange:[2,4], bRange:[1,7],  cRange:[2,4], dRange:[1,7],  allowNegativeB:true, allowNegativeD:true },
+    };
+
+    // Generate inner content based on structure
+    let innerLayer  = null;   // the main inner layer result
+    let outerLayer  = null;   // a second layer wrapping the inner (for two-step)
+    let innerMethod = null;
+    let outerMethod = null;
+
+    // Helper: pick DoS values cleanly (no further-factorable)
+    function pickDoS(prof) {
+      const cfg = dosConfigs[prof] || dosConfigs.proficient;
+      // aRoot: free. bRoot: must not share GCF with aRoot.
+      const [aRoot, bRoot] = pickNumbers([cfg.aRootRange, cfg.bRootRange], { avoidGCD: true });
+      const varExponent = choice(cfg.varExponents);
+      return generateDoSLayer({ aRoot, bRoot, varExponent, useY: false });
+    }
+
+    function pickPST(prof) {
+      const cfg = pstConfigs[prof] || pstConfigs.proficient;
+      // aRoot: free. bRootAbs: must not share GCF with aRoot.
+      const [aRoot, bRootAbs] = pickNumbers([cfg.aRootRange, cfg.bRootRange], { avoidGCD: true });
+      const bSign = cfg.allowNegativeB ? choice([1,-1]) : 1;
+      const varExponent = choice(cfg.varExponents);
+      // Prevent chained DoS: if bRoot negative and both roots are perfect squares at exp=2, increment bRootAbs
+      const finalBRootAbs = (bSign < 0 && varExponent === 2 && isPerfectSquare(aRoot) && isPerfectSquare(bRootAbs))
+        ? bRootAbs + 1 : bRootAbs;
+      return generatePSTLayer({ aRoot, bRootAbs: finalBRootAbs, bRoot: finalBRootAbs * bSign, varExponent, useY: false });
+    }
+
+    function pickST(prof) {
+      const cfg = stConfigs[prof] || stConfigs.proficient;
+      const pool = [2,2,3,3,5];
+      let pAbs = buildFromPrimes(pool,[1,2],[4,12]);
+      let qAbs = buildFromPrimes(pool,[1,2],[4,12]);
+      if (pAbs === qAbs) qAbs = qAbs + 1;  // deterministic fix: no retry
+      const p = cfg.allowNegativeB ? pAbs*choice([1,-1]) : pAbs;
+      const q = cfg.allowNegativeD ? qAbs*choice([1,-1]) : qAbs;
+      return generateTrinomialLayer({ aRange:[1,1], bRange:[p,p], cRange:[1,1], dRange:[q,q], skipValidation:true });
+    }
+
+    function pickGT(prof) {
+      const cfg = gtConfigs[prof] || gtConfigs.proficient;
+      return generateTrinomialLayer(cfg);
+    }
+
+    // Build inner layer
+    if (structure.includes('dos-dos')) {
+      // Inner DoS (pure, varExponent=2), then outer DoS uses its terms scaled up
+      const inner = pickDoS('developing');
+      innerLayer  = inner;
+      innerMethod = 'dos';
+      // Outer DoS: scale innerTerms up by squaring — (x²+a²)(x²-a²) from x^4-a^4
+      // innerTerms are [a²x², -b²], so outer DoS has aRoot=inner.aRoot, bRoot=inner.bRoot, varExponent=4
+      outerLayer  = generateDoSLayer({ aRoot: inner.aRoot, bRoot: inner.bRoot, varExponent: inner.varExponent * 2, useY: false });
+      outerMethod = 'dos';
+    } else if (structure.includes('grp-dos')) {
+      // Grouping where second factor is a DoS: (x+a)(x²-b²)
+      // Generate the DoS part first, then build grouping around it
+      const dosInner = pickDoS('developing');
+      // dosInner.innerTerms = [c²x², -d²] where varExponent=2
+      // Use these as the "d" (constant) pinned to a DoS: d = -b², c=1, cXExponent=2
+      const aVal = randInt(2, 8);
+      outerLayer = generateGroupingLayer({
+        aRange: [1,1], aXExponent: 1, allowNegativeA: false,
+        bRange: [aVal, aVal], allowNegativeB: false,
+        cRange: [dosInner.aRoot * dosInner.aRoot, dosInner.aRoot * dosInner.aRoot], cXExponent: 2,
+        dRange: [-(dosInner.bRoot * dosInner.bRoot), -(dosInner.bRoot * dosInner.bRoot)],
+        allowNegativeD: false, dYExponent: 0,
+        skipValidation: true
+      });
+      innerLayer  = dosInner;
+      innerMethod = 'dos';
+      outerMethod = 'grouping';
+    } else {
+      // Single inner method
+      const m = structure.replace('gcf-', '');
+      if (m === 'dos')      { innerLayer = pickDoS(innerProf);  innerMethod = 'dos'; }
+      else if (m === 'pst') { innerLayer = pickPST(innerProf);  innerMethod = 'pst'; }
+      else if (m === 'st')  { innerLayer = pickST(innerProf);   innerMethod = 'st';  }
+      else if (m === 'gt')  { innerLayer = pickGT(innerProf === 'emerging' ? 'developing' : innerProf); innerMethod = 'gt'; }
+    }
+
+    // --- Determine the "innermost" terms for GCF wrapping ---
+    const hasGCF   = structure.startsWith('gcf-');
+    const twoStep  = structure.includes('dos-dos') || structure.includes('grp-dos');
+
+    // The terms we feed into the GCF layer are the outermost layer's terms
+    const outerTerms = outerLayer
+      ? (outerLayer.terms || outerLayer.innerTerms || outerLayer.trinomialTerms)
+      : (innerLayer.innerTerms || innerLayer.trinomialTerms || innerLayer.terms);
+
+    let gcfLayer = null;
+    if (hasGCF) {
+      const gcfCfg = gcfRanges[proficiency];
+      gcfLayer = generateGCFLayer({ ...gcfCfg, insideTerms: outerTerms });
+    }
+
+    // --- Build expression and final answer ---
+    const outerExpr = outerLayer ? outerLayer.expression
+      : (innerLayer.expression);
+
+    fullExpression = gcfLayer ? gcfLayer.expression : outerExpr;
+
+    // Build final answer string
+    const innerAnswer  = innerLayer.answer;
+    const outerAnswer  = outerLayer ? outerLayer.answer : null;
+
+    if (gcfLayer) {
+      if (outerAnswer) {
+        // GCF + two-step: e.g. 3(x²+4)(x+2)(x-2)
+        // outerAnswer might be e.g. (x²+a²)(x²-a²), we need to replace the
+        // inner DoS factor with its fully factored form
+        const expandedOuter = outerAnswer.replace(innerLayer.expression, innerAnswer);
+        // Strip outer parens if they wrap the whole thing (avoid double parens)
+        finalAnswer = `${gcfLayer.totalGCF}${expandedOuter}`;
+      } else {
+        // GCF + single inner method: totalGCF × innerAnswer
+        // innerAnswer is already wrapped in parens e.g. (x+3)(x-3) or (x+2)^2
+        finalAnswer = `${gcfLayer.totalGCF}${innerAnswer}`;
+      }
+    } else if (outerAnswer) {
+      // Replace the inner expression within the outer answer.
+      // If the replacement creates double parens like ((a)(b)), flatten them.
+      let replaced = outerAnswer.replace(innerLayer.expression, innerAnswer);
+      // Fix double parens: X((A)(B)) → X(A)(B)
+      replaced = replaced.replace(/\(\(/g, '(').replace(/\)\)/g, ')');
+      finalAnswer = replaced;
+    } else {
+      finalAnswer = innerAnswer;
+    }
+
+    // -------------------------------------------------------------------------
+    // Build workflow
+    // -------------------------------------------------------------------------
+
+    // Step 1: GCF check (always first)
+    const gcfRadioId = 'ff-gcf-check';
+    workflow.push(makeRadio(
+      gcfRadioId,
+      'Is there a GCF (other than 1)?',
+      hasGCF ? 'yes' : 'no',
+      null  // first step, no gate
+    ));
+
+    let lastGateId = gcfRadioId;
+
+    if (hasGCF && gcfLayer) {
+      // GCF steps
+      const gcfSteps = gateSteps(gcfLayer.gcfWorkflow, gcfRadioId, 'ff-gcf');
+      workflow.push(...gcfSteps);
+
+      // "Write what you have so far" after GCF
+      const gcfWrittenId = 'ff-gcf-written';
+      // GCF answer: totalGCF(insideExpression) — standard format
+      const gcfWrittenExpr = gcfLayer.answer;
+      workflow.push(makeWritten(
+        gcfWrittenId,
+        'Write the expression with the GCF factored out',
+        gcfWrittenExpr,
+        `ff-gcf-${gcfLayer.gcfWorkflow[gcfLayer.gcfWorkflow.length - 1].id}`
+      ));
+      lastGateId = gcfWrittenId;
+
+      steps.push(...gcfLayer.gcfSteps.map(s => ({
+        ...s,
+        expression: fullExpression,
+        output: gcfWrittenExpr
+      })));
+    }
+
+    // Step 2: Outer layer (if two-step)
+    if (twoStep && outerLayer) {
+      const outerExprToFactor = gcfLayer ? gcfLayer.insideExpression : outerExpr;
+      const outerRadioId = 'ff-outer-check';
+      workflow.push(makeRadio(
+        outerRadioId,
+        `Can ${outerExprToFactor} be factored further?`,
+        'yes',
+        lastGateId
+      ));
+      lastGateId = outerRadioId;
+
+      // Outer layer steps
+      const outerStepSrc = outerLayer.groupingWorkflow || outerLayer.dosWorkflow || outerLayer.pstWorkflow || outerLayer.workflow || [];
+      const outerGated = gateSteps(outerStepSrc, outerRadioId, 'ff-outer');
+      // Remove the 'final' step — we replace it with a "written so far" step
+      const outerGatedNoFinal = outerGated.filter(s => !s.id.endsWith('-final'));
+      workflow.push(...outerGatedNoFinal);
+
+      // After outer factoring, write partial answer
+      const outerWrittenId = 'ff-outer-written';
+      const outerFactoredExpr = outerLayer.answer; // e.g. (x²+a²)(x²-a²)
+      const outerWrittenFull = gcfLayer
+        ? `${gcfLayer.totalGCF}(${outerFactoredExpr})`
+        : outerFactoredExpr;
+      const outerLastStep = outerGated[outerGated.length - 2]; // second to last (before final)
+      workflow.push(makeWritten(
+        outerWrittenId,
+        'Write the full expression with this step factored',
+        outerWrittenFull,
+        outerLastStep?.id || lastGateId
+      ));
+      lastGateId = outerWrittenId;
+
+      steps.push({
+        expression: gcfLayer ? `${gcfLayer.totalGCF}(${outerExprToFactor})` : outerExprToFactor,
+        rule: outerMethod,
+        output: outerWrittenFull,
+        explanation: `Factor ${outerExprToFactor} → ${outerFactoredExpr}`
+      });
+    }
+
+    // Step 3: Inner layer check — can the inner factor be factored further?
+    const innerExprToCheck = twoStep
+      ? innerLayer.expression  // the inner DoS factor
+      : (gcfLayer ? gcfLayer.insideExpression : innerLayer.expression);
+
+    // Only ask about inner if it's degree >= 2
+    const innerTermsArr = innerLayer.innerTerms || innerLayer.trinomialTerms || innerLayer.terms || [];
+    const maxExp = Math.max(...innerTermsArr.map(t => t.exponent || 0));
+
+    if (maxExp >= 2) {
+      const innerRadioId = 'ff-inner-check';
+      workflow.push(makeRadio(
+        innerRadioId,
+        `Can ${innerExprToCheck} be factored further?`,
+        'yes',
+        lastGateId
+      ));
+      lastGateId = innerRadioId;
+
+      // Inner layer steps
+      const innerStepSrc = innerLayer.dosWorkflow || innerLayer.pstWorkflow || innerLayer.workflow || [];
+      const innerGated = gateSteps(innerStepSrc, innerRadioId, 'ff-inner');
+      workflow.push(...innerGated);
+
+      // Final answer step gated on last inner step
+      const innerLastStep = innerGated[innerGated.length - 1];
+      const finalWrittenId = 'ff-final-written';
+      workflow.push(makeWritten(
+        finalWrittenId,
+        'Write the completely factored form',
+        finalAnswer,
+        innerLastStep?.id || lastGateId
+      ));
+
+      steps.push({
+        expression: innerExprToCheck,
+        rule: innerMethod,
+        output: finalAnswer,
+        explanation: `Factor ${innerExprToCheck} → ${innerLayer.answer}`
+      });
+    } else {
+      // Inner factor is linear — just ask for final answer directly
+      const finalWrittenId = 'ff-final-written';
+      workflow.push(makeWritten(
+        finalWrittenId,
+        'Write the completely factored form',
+        finalAnswer,
+        lastGateId
+      ));
+    }
+
+    return {
+      id:          `ff-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      method:      'ff',
+      proficiency,
+      expression:  fullExpression,
+      answer:      finalAnswer,
+      steps,
+      workflow
+    };
+  }
 
   // ---------------------------------------------------------------------------
   // generateMixedMethodProblem(proficiency)
@@ -1270,6 +1694,9 @@ window.Generators = (() => {
     }
     if (settings.method === 'mixed') {
       return generateMixedMethodProblem(settings.difficulty);
+    }
+    if (settings.method === 'ff') {
+      return generateFullFactoringProblem(settings.difficulty);
     }
     return null;
   }

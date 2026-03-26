@@ -25,11 +25,13 @@ deliberately deferred and why.
   identification entirely. Decision-tree hint walks through term count
   and pattern recognition.
 
+- **Full Factoring** — chained multi-step problems. Flat pre-computed
+  workflow with progressive reveal via gatedBy. Proficiency structures:
+  Emerging: GCF + [DoS|PST|ST]. Developing: GCF + [DoS|PST|ST|GT].
+  Proficient: GCF + inner OR two-step no-GCF [DoS→DoS | Grp→DoS].
+  Extending: GCF + two-step inner.
+
 ### Planned — in curriculum order
-1. **Full Factoring** — chained problems (GCF → something else).
-   Workflow: "Is there a GCF?" → GCF steps → "Can it be factored
-   further?" → method identification → continue.
-   *This is where higher y exponents in DoS become valid.*
 
 ### Deferred
 - **Two-variable PST at Extending** — (ax + by)² is curriculum-standard
@@ -43,6 +45,15 @@ deliberately deferred and why.
 
 - **Negative leading coefficients** — changes the workflow steps
   (factor out −1 first). Future feature.
+
+- **pickNumbers backtracking** — if all slots fail constraints, could
+  backtrack and re-generate earlier slots. Currently uses prime fallback
+  which handles all realistic cases. Full backtracking would be the
+  theoretically complete solution but is unnecessary for our ranges.
+
+- **nextPrime memoization** — cache computed primes for reuse. Only
+  called as fallback when a pool is exhausted (extremely rare). Not
+  worth implementing until profiling shows it as a bottleneck.
 
 ---
 
@@ -145,11 +156,19 @@ deliberately deferred and why.
 - `generateDoSLayer()` — reusable DoS workflow builder
 - `generatePSTLayer()` — reusable PST workflow builder
 - `generateTrinomialLayer()` — shared trinomial primitive for both
-  Simple and General Trinomial, calls grouping layer internally
+  Simple and General Trinomial, calls grouping layer internally.
+  Supports `xExponent` parameter for trinomials in x² (degree 4).
+  ST/GT generators use xExponent=2 at Proficient/Extending (33%).
 - `generateInsideTerms()`, `isValidGroupingFactors()` — validated
-  term/factor generators. Grouping validator now rejects second factors
-  that are themselves a DoS (e.g. x²−25), preventing chained factoring
-  problems from appearing as standalone grouping problems.
+  term/factor generators. Grouping validator rejects second factors
+  that are themselves a DoS (e.g. x²−25).
+- `pickNumbers(slots, options)` — deterministic number generator.
+  Pool-based (not range-trimming). Supports avoidGCD, avoidEqual,
+  avoidAllPerfectSquares. Circular scan within pool; prime fallback
+  if pool exhausted. Replaces all do-while retry loops.
+- `gatedBy` step system — any workflow step can gate subsequent steps.
+  Used by Mixed Method (identify-method gates all inner steps) and
+  Full Factoring (each factoring checkpoint gates its sub-steps).
 
 ### Planned
 - **`normalizeAnswer(str, method)`** — method-aware normalization

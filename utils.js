@@ -197,6 +197,113 @@ window.Utils = (() => {
     ]);
   }
 
+
+  // ---------------------------------------------------------------------------
+  // pickNumbers(slots, options)
+  //
+  // Generates one number per slot, deterministically satisfying constraints.
+  // Each slot is [min, max] or { range: [min, max], exclude: [...] }.
+  // Slots are processed narrowest-pool-first so fixes happen on wider pools.
+  //
+  // Options:
+  //   avoidGCD: bool             — gcd of ALL generated numbers must = 1
+  //   avoidEqual: bool           — no two generated numbers may be equal
+  //   avoidAllPerfectSquares     — at least one must not be a perfect square
+  //
+  // Internal flow per slot:
+  //   1. Build pool from range, remove excluded + already-chosen values
+  //   2. Pick random start index, scan forward (wrapping) for valid value
+  //   3. If full circle fails → fallback to first prime above pool max
+  //
+  // Returns array in SAME ORDER as input slots.
+  // ---------------------------------------------------------------------------
+  function nextPrime(n) {
+    const isPr = v => { if (v < 2) return false; for (let i=2; i*i<=v; i++) if (v%i===0) return false; return true; };
+    let v = n + 1;
+    while (!isPr(v)) v++;
+    return v;
+  }
+
+  function pickNumbers(slots, {
+    avoidGCD               = false,
+    avoidEqual             = false,
+    avoidAllPerfectSquares = false
+  } = {}) {
+    const n = slots.length;
+
+    // Normalise: accept [min,max] or {range, exclude}
+    const norm = slots.map(s =>
+      Array.isArray(s)
+        ? { range: s, exclude: [] }
+        : { range: s.range, exclude: s.exclude || [] }
+    );
+
+    // Sort narrowest-pool-first, preserve original index
+    const indexed = norm.map((s, i) => ({
+      ...s,
+      i,
+      poolSize: s.range[1] - s.range[0] + 1 - s.exclude.length
+    }));
+    indexed.sort((a, b) => a.poolSize - b.poolSize);
+
+    const result = new Array(n);
+
+    for (let step = 0; step < n; step++) {
+      const { range: [lo, hi], exclude, i } = indexed[step];
+      const prevResults = indexed.slice(0, step).map(({ i }) => result[i]);
+
+      // Build pool: range minus excluded and (if avoidEqual) already-chosen values
+      const excluded = new Set([
+        ...exclude,
+        ...(avoidEqual ? prevResults : [])
+      ]);
+      const pool = [];
+      for (let v = lo; v <= hi; v++) {
+        if (!excluded.has(v)) pool.push(v);
+      }
+
+      // Constraint: avoidGCD against all previously chosen values
+      const combined = avoidGCD && prevResults.length > 0
+        ? prevResults.reduce((a, b) => a * b, 1)
+        : null;
+
+      // On the last slot: if avoidAllPerfectSquares and all previous values are
+      // perfect squares, this slot must not be a perfect square.
+      const isLastSlot = step === n - 1;
+      const mustAvoidSquare = avoidAllPerfectSquares
+        && isLastSlot
+        && prevResults.every(v => isPerfectSquare(v));
+
+      const satisfies = v =>
+        (!combined || gcdList([v, combined]) === 1) &&
+        (!mustAvoidSquare || !isPerfectSquare(v));
+
+      let val = null;
+      if (pool.length > 0) {
+        const startIdx = randInt(0, pool.length - 1);
+        for (let offset = 0; offset < pool.length; offset++) {
+          const candidate = pool[(startIdx + offset) % pool.length];
+          if (satisfies(candidate)) { val = candidate; break; }
+        }
+      }
+
+      // Fallback: first prime above pool max satisfying constraint
+      // (primes always satisfy avoidGCD; also never perfect squares for p>2... wait,
+      //  no prime is a perfect square since squares are composite — so primes
+      //  satisfy mustAvoidSquare automatically too)
+      if (val === null) {
+        let fb = nextPrime(hi);
+        while (!satisfies(fb)) fb = nextPrime(fb);
+        val = fb;
+      }
+
+      result[i] = val;
+    }
+
+    return result;
+  }
+
+
   return {
     buildFromPrimes,
     choice,
@@ -210,6 +317,7 @@ window.Utils = (() => {
     formatPolynomial,
     gcdList,
     isLikelyIrreducibleQuadratic,
+    pickNumbers,
     isPerfectSquare,
     normalizeRaw,
     randInt,
