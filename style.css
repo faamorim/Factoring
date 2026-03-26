@@ -320,6 +320,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   line-height: 1.4;
 }
 
+@keyframes hint-pulse {
+  0%   { background: var(--info-bg); }
+  30%  { background: color-mix(in srgb, var(--info) 22%, transparent); }
+  100% { background: var(--info-bg); }
+}
+
+.hint-pulse {
+  animation: hint-pulse 0.5s ease-out forwards;
+}
+
 .feedback {
   border-radius: 14px;
   padding: 12px 14px;

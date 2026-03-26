@@ -122,11 +122,26 @@ deliberately deferred and why.
   the next level for the current step — progressively stronger nudges without
   giving away the answer. First hint: general direction. Second: more specific.
   Third: nearly explicit (e.g. gives one of the two factors directly).
-  Existing single `hint` strings stay supported as fallback for steps that
-  don't need multiple levels. The find-factors step in Simple Trinomial is
-  the natural first candidate: hint1 = "think about factor pairs of |c|",
-  hint2 = sign conclusion (both negative / opposite signs / larger has sign
-  of b), hint3 = one of the two factors explicitly.
+  Existing single `hint` strings stay supported as fallback during migration;
+  end state is all steps converted to `hints: []` arrays with no fallback.
+  Hint display shows "Hint N/M:" prefix so students know how many levels exist.
+  Hint text pulses on update so the change catches the eye.
+  The find-factors step in Simple Trinomial is the natural first candidate:
+  hint1 = "think about factor pairs of |c|",
+  hint2 = sign conclusion (both negative / opposite signs / larger has sign of b),
+  hint3 = one of the two factors explicitly.
+
+- **Radio option narrowing via hints** — Mixed Method and Full Factoring
+  identification steps currently show only the valid options for that expression
+  (e.g. a binomial only gets DoS / "can't factor"). Planned: start with all
+  methods as options, then progressively disable invalid ones as hints are
+  revealed. Generator stamps each radio step with a `disableAt` map —
+  e.g. `{ 2: ['grouping', 'gt'], 3: ['pst'] }` — meaning "at hint level 2,
+  disable these options". Renderer applies disabled state mechanically;
+  no domain logic in render layer. Level 1 hint: count the terms. Level 2:
+  disable methods inconsistent with that term count. Level 3+: narrow further
+  (e.g. by leading coefficient or perfect square check). Generator knows the
+  math and computes the full `disableAt` map at problem generation time.
 
 - **Progress tracking** — count of correct/incorrect per method and
   proficiency level, stored in localStorage. Simple session stats.

@@ -20,6 +20,36 @@ window.Renderer = (() => {
     container.innerHTML = '';
     if (!state.currentProblem) return;
 
+    // Returns the hint text to display for a step given how many levels have been revealed.
+    // Supports both hints:[] (multi-level) and hint:'' (single string, legacy).
+    // Prefixes with "Hint N/Total:" when there are multiple levels available.
+    function getHintText(step, revealedCount) {
+      if (!revealedCount) return null;
+      const levels = step.hints ?? (step.hint ? [step.hint] : []);
+      if (levels.length === 0) return null;
+      const idx = Math.min(revealedCount, levels.length) - 1;
+      const text = levels[idx];
+      if (levels.length === 1) return `💡 ${text}`;
+      return `💡 Hint ${idx + 1}/${levels.length}: ${text}`;
+    }
+
+    // Creates a hint element, appends it to parent.
+    // Pulses only when this step was just revealed (state.justRevealedHintFor matches).
+    function appendHint(parent, step, revealedCount) {
+      const text = getHintText(step, revealedCount);
+      if (!text) return;
+      const hintEl = document.createElement('div');
+      hintEl.className = 'step-hint';
+      hintEl.innerHTML = rawToPrettyHtml(text);
+      parent.appendChild(hintEl);
+      if (state.justRevealedHintFor === step.id) {
+        requestAnimationFrame(() => {
+          hintEl.classList.add('hint-pulse');
+          hintEl.addEventListener('animationend', () => hintEl.classList.remove('hint-pulse'), { once: true });
+        });
+      }
+    }
+
     if (state.settings.mode === 'final') {
       ensureInputRecord(state, 'final-answer');
       const record = state.inputValues['final-answer'];
@@ -49,7 +79,8 @@ window.Renderer = (() => {
         state.currentProblem.workflow.slice(0, hintsShown).forEach((hintStep) => {
           const hintEl = document.createElement('div');
           hintEl.className = 'step-hint';
-          hintEl.innerHTML = `💡 ${rawToPrettyHtml(hintStep.hint)}`;
+          const hintContent = hintStep.hints?.[0] ?? hintStep.hint ?? '';
+          hintEl.innerHTML = `💡 ${rawToPrettyHtml(hintContent)}`;
           hintList.appendChild(hintEl);
         });
         wrapper.appendChild(hintList);
@@ -83,7 +114,7 @@ window.Renderer = (() => {
 
       const label = document.createElement('div');
       label.className = 'step-label';
-      label.textContent = step.label;
+      label.innerHTML = rawToPrettyHtml(step.label);
 
       // Radio steps — method identification
       if (step.inputType === 'radio') {
@@ -126,14 +157,6 @@ window.Renderer = (() => {
         });
         item.appendChild(label);
         item.appendChild(radioWrap);
-
-        // Inline hint for radio steps
-        if (state.revealedHints?.[step.id] && step.hint) {
-          const hintEl = document.createElement('div');
-          hintEl.className = 'step-hint';
-          hintEl.innerHTML = `💡 ${rawToPrettyHtml(step.hint)}`;
-          item.appendChild(hintEl);
-        }
 
       // Pair steps get two side-by-side input fields, each independently focusable
       } else if (step.inputType === 'pair') {
@@ -182,12 +205,7 @@ window.Renderer = (() => {
       }
 
       // Inline hint, shown only after student requests it
-      if (state.revealedHints?.[step.id]) {
-        const hintEl = document.createElement('div');
-        hintEl.className = 'step-hint';
-        hintEl.innerHTML = `💡 ${rawToPrettyHtml(step.hint)}`;
-        item.appendChild(hintEl);
-      }
+      appendHint(item, step, state.revealedHints?.[step.id]);
 
       list.appendChild(item);
     });

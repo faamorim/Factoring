@@ -29,7 +29,8 @@
     revealedSteps: 0,
     stepStatuses: {},
     pairFieldStatuses: {},
-    revealedHints: {}
+    revealedHints: {},
+    justRevealedHintFor: null
   };
 
   const elements = {
@@ -263,8 +264,14 @@
       render();
       if (revealHint) {
         const firstBlank = blankSteps[0];
-        state.revealedHints[firstBlank.id] = true;
+        const hintLevels = firstBlank.hints?.length ?? 1;
+        const current = state.revealedHints[firstBlank.id] || 0;
+        if (current < hintLevels) {
+          state.revealedHints[firstBlank.id] = current + 1;
+          state.justRevealedHintFor = firstBlank.id;
+        }
         render();
+        state.justRevealedHintFor = null;
         setFeedback(`Looking good so far! Hint added to the next step.`, 'info');
         setTimeout(() => pulseStep(firstBlank.id), 50);
       } else {
@@ -277,9 +284,15 @@
     // There is a wrong step
     const wrongStep = workflow[firstWrongIndex];
     if (revealHint) {
-      state.revealedHints[wrongStep.id] = true;
+      const hintLevels = wrongStep.hints?.length ?? 1;
+      const current = state.revealedHints[wrongStep.id] || 0;
+      if (current < hintLevels) {
+        state.revealedHints[wrongStep.id] = current + 1;
+        state.justRevealedHintFor = wrongStep.id;
+      }
     }
     render();
+    state.justRevealedHintFor = null;
     if (revealHint) {
       setFeedback('Hint added to the incorrect step.', 'info');
     } else {
