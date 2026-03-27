@@ -1010,59 +1010,118 @@ window.Generators = (() => {
     const workflow = [];
     const steps    = [];
 
-    // Step: identify A (only if could be general)
-    if (couldBeGeneral) {
-      const leadingVarText = xExponent === 1 ? 'x²' : `x^${2 * xExponent}`;
-      workflow.push({
-        id: 'identify-a',
-        label: `Identify the coefficient of ${leadingVarText}`,
-        hint: `Look at the first term. What number multiplies ${leadingVarText}?`,
-        expected: String(A)
-      });
-    }
-
-    // Step: identify B
+    // Step: identify B (sum of factors)
     workflow.push({
       id: 'identify-b',
-      label: 'Identify the coefficient of x',
-      hint: `Look at the middle term. What number multiplies x?`,
+      label: 'What do the factors add to?',
+      hints: [
+        `In a trinomial, the coefficient of x is always the sum of the two factors.`,
+        `Look at the x term. What is its coefficient?`,
+        `The coefficient of x is ${B}, so the two factors must add to ${B}.`
+      ],
       expected: String(B)
     });
 
-    // Step: identify C
-    workflow.push({
-      id: 'identify-c',
-      label: 'Identify the constant term',
-      hint: `Look at the last term. What is the number with no variable?`,
-      expected: String(C)
-    });
-
-    // Step: compute A×C (only if could be general)
+    // Step: identify product (C for simple, A×C for general)
     if (couldBeGeneral) {
+      const leadingVarText = xExponent === 1 ? 'x²' : `x^${2 * xExponent}`;
       workflow.push({
-        id: 'compute-ac',
-        label: 'Multiply the coefficient of x² by the constant term',
-        hint: `Multiply ${A} × ${C}. This is the product your factor pair must equal.`,
+        id: 'identify-c',
+        label: 'What do the factors multiply to?',
+        hints: [
+          `When the coefficient of ${leadingVarText} is not 1, the product of the factors is not just the constant term — it is the coefficient of ${leadingVarText} multiplied by the constant term.`,
+          `The coefficient of ${leadingVarText} is ${A} and the constant term is ${C}. Multiply them together.`,
+          `${A} × ${C} = ${A * C}, so the two factors must multiply to ${A * C}.`
+        ],
         expected: String(A * C)
+      });
+    } else {
+      workflow.push({
+        id: 'identify-c',
+        label: 'What do the factors multiply to?',
+        hints: [
+          `In a trinomial x² + bx + c, the constant term is always the product of the two factors.`,
+          `Look at the term with no variable. What is that number?`,
+          `The constant term is ${C}, so the two factors must multiply to ${C}.`
+        ],
+        expected: String(C)
       });
     }
 
     // Step: find the pair
-    const product   = couldBeGeneral ? A * C : C;
+    const product    = couldBeGeneral ? A * C : C;
     const pairSorted = [p, q].slice().sort((x, y) => x - y).join(', ');
-    const cSign     = product >= 0 ? 'positive' : 'negative';
-    const findHint  = `You need two integers that multiply to ${product} and add to ${B}. ` +
-      `Think about factor pairs of ${Math.abs(product)}.` +
-      (product > 0 && B > 0 ? ` Since the product is positive and the sum is positive, both integers are positive.` : '') +
-      (product > 0 && B < 0 ? ` Since the product is positive and the sum is negative, both integers are negative.` : '') +
-      (product < 0 ? ` Since the product is negative, the integers have opposite signs. The one with the larger absolute value has the same sign as the sum (${B > 0 ? 'positive' : 'negative'}).` : '');
+
+    // Factor pair listing utility — returns all pairs [a,b] where a*b = |product|, a <= b
+    function absFactorPairs(n) {
+      const abs = Math.abs(n);
+      const pairs = [];
+      for (let i = 1; i <= Math.sqrt(abs); i++) {
+        if (abs % i === 0) pairs.push([i, abs / i]);
+      }
+      return pairs;
+    }
+
+    // Build signed factor pairs list based on sign reasoning already established
+    // After hint 3 (sum sign) we know the exact sign configuration
+    function signedFactorPairs(product, sum) {
+      const pairs = absFactorPairs(product);
+      if (product > 0 && sum > 0) {
+        // Both positive
+        return pairs.map(([a, b]) => `(${a}, ${b})`).join(',  ');
+      } else if (product > 0 && sum < 0) {
+        // Both negative
+        return pairs.map(([a, b]) => `(−${a}, −${b})`).join(',  ');
+      } else {
+        // Opposite signs — larger has sign of sum
+        return pairs.map(([a, b]) => {
+          const [small, large] = [a, b]; // a <= b always
+          return sum > 0
+            ? `(−${small}, ${large})`
+            : `(${small}, −${large})`;
+        }).join(',  ');
+      }
+    }
+
+    // Hint 2 — product sign
+    const hint2 = product < 0
+      ? `The product is ${product} — since it is negative, the two factors have opposite signs.`
+      : `The product is ${product} — since it is positive, the two factors have the same sign.`;
+
+    // Hint 3 — sum sign (branches on same vs opposite)
+    let hint3;
+    if (product > 0 && B > 0) {
+      hint3 = `The sum is ${B} — since it is positive and both factors share a sign, both factors are positive.`;
+    } else if (product > 0 && B < 0) {
+      hint3 = `The sum is ${B} — since it is negative and both factors share a sign, both factors are negative.`;
+    } else if (product < 0 && B > 0) {
+      hint3 = `The sum is ${B} — since it is positive and the factors have opposite signs, the larger factor is positive.`;
+    } else {
+      hint3 = `The sum is ${B} — since it is negative and the factors have opposite signs, the larger factor is negative.`;
+    }
+
+    // Hint 4 — signed factor pair list
+    const hint4 = `With those signs, the factor pairs of ${Math.abs(product)} to check are: ${signedFactorPairs(product, B)}. Which pair adds to ${B}?`;
+
+    // Hint 5 — verify (the 169 move — give the pair, let them confirm)
+    // When signs differ, lead with the negative factor (the trickier one)
+    const [pSorted, qSorted] = [p, q].sort((a, b) => a - b);
+    const hint5 = `Try the pair (${pSorted}, ${qSorted}): does ${pSorted} × ${qSorted} = ${product}? Does ${pSorted} + ${qSorted} = ${B}?`;
+
+    // Hint 6 — reasoning → result
+    const hint6 = `Since the product must equal ${product} and the sum must equal ${B}, the two factors are ${pSorted} and ${qSorted}.`;
 
     workflow.push({
       id: 'find-factors',
-      label: couldBeGeneral
-        ? `Find two integers: product = (coefficient of x²) × (constant term), sum = coefficient of x`
-        : 'Find two integers: product = constant term, sum = coefficient of x',
-      hint: findHint,
+      label: `Find two integers: product = ${product}, sum = ${B}`,
+      hints: [
+        `Find two integers that multiply to ${product} and add to ${B}. Try listing the factor pairs of ${Math.abs(product)} systematically.`,
+        hint2,
+        hint3,
+        hint4,
+        hint5,
+        hint6
+      ],
       expected: pairSorted,
       inputType: 'pair'
     });
@@ -1070,15 +1129,20 @@ window.Generators = (() => {
     // --- Branch: simple path vs grouping path ---
     if (a === 1 && c === 1) {
       // Simple trinomial — write factors directly
-      const finalLabel = couldBeGeneral
-        ? `The coefficient of x² is 1, so we can write the factored form directly as (x + first integer)(x + second integer)`
-        : `Write the factored form`;
-      const finalHint = `Use your two integers as the constants in each factor. ` +
-        `Remember: (x + negative number) writes as (x − positive number).`;
+      const finalLabel = `Write the factored form`;
+      const hasNegative = p < 0 || q < 0;
+      const finalHints = hasNegative ? [
+        `Each factor takes the form (x + integer). Use your two integers ${pSorted} and ${qSorted} as the constants.`,
+        `When adding a negative number, you can write it as subtraction. For example, (x + −3) is written as (x − 3).`,
+        `Your two integers are ${pSorted} and ${qSorted}, giving the factored form ${answer}.`
+      ] : [
+        `Each factor takes the form (x + integer). Use your two integers ${pSorted} and ${qSorted} as the constants.`,
+        `Your two integers are ${pSorted} and ${qSorted}, giving the factored form ${answer}.`
+      ];
       workflow.push({
         id: 'final',
         label: finalLabel,
-        hint: finalHint,
+        hints: finalHints,
         expected: answer
       });
       steps.push({
@@ -1109,7 +1173,11 @@ window.Generators = (() => {
       workflow.push({
         id: 'rewrite',
         label: `Rewrite the middle term using your two integers as separate x-terms`,
-        hint: `Replace ${B}x with your two integers as separate x-terms: ${p}x + ${q}x.`,
+        hints: [
+          `The middle term can be split into two separate x-terms using the integers you found. The first and last terms stay unchanged.`,
+          `Replace ${B}x with ${p}x + ${q}x, keeping the rest of the expression the same.`,
+          `Splitting ${B}x into ${p}x + ${q}x gives you: ${splitExpr}.`
+        ],
         expected: splitExpr
       });
 
