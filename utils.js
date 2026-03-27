@@ -89,8 +89,8 @@ window.Utils = (() => {
 
   function rawToPretty(raw) {
     return raw
+      .replace(/\^$/g, '\uE000')   // bare caret → private sentinel (converted before ^digits)
       .replace(/\^([0-9]+)/g, (_, digits) => [...digits].map(d => superscriptMap[d] || d).join(''))
-      .replace(/\^$/g, '\u2070')   // bare caret → ⁰ placeholder (same font metrics as ²³⁴)
       .replace(/-/g, '−');
   }
 
@@ -108,11 +108,17 @@ window.Utils = (() => {
     // Wrap x and y in math-variable spans — only when not adjacent to non-math letters.
     // Excludes x/y inside words like "Multiply", "exponent", "every" etc.
     // Allows xy compound variables and standalone x/y next to digits/operators.
-    const withVars = escaped.replace(/(?<![a-wzA-WZ])[xy](?![a-wzA-WZ])/g, (match) => `<span class="math-var">${match}</span>`);
+    // Replace all regular spaces with thin spaces — ensures consistent math spacing
+    // in the HTML layer without touching raw strings elsewhere in the codebase.
+    const withSpacing = escaped.replace(/ /g, '&thinsp;');
+    // Wrap x and y in math-variable spans — only when not adjacent to non-math letters.
+    // Excludes x/y inside words like "Multiply", "exponent", "every" etc.
+    // Allows xy compound variables and standalone x/y next to digits/operators.
+    const withVars = withSpacing.replace(/(?<![a-wzA-WZ])[xy](?![a-wzA-WZ])/g, (match) => `<span class="math-var">${match}</span>`);
     // Wrap the ⁰ placeholder in a blink span. No alignment CSS needed —
     // ⁰ is a real Unicode superscript character with the same font metrics
     // and baseline position as ²³⁴ etc.
-    return withVars.replace(/\u2070/g, '<span class="exp-placeholder">⁰</span>');
+    return withVars.replace(/\uE000/g, '<span class="exp-placeholder">\u2070</span>');
   }
 
   function normalizeRaw(raw) {
@@ -120,6 +126,8 @@ window.Utils = (() => {
       .replace(/\s+/g, '')
       .replace(/−/g, '-')
       .replace(/\u2062/g, '')
+      .replace(/^\+/, '')           // strip leading + (e.g. +8 → 8)
+      .replace(/\b0+(\d)/g, '$1')  // strip leading zeroes from integers (e.g. 08 → 8)
       .replace(/([0-9)])([a-zA-Z(])/g, '$1*$2')
       .replace(/([a-zA-Z])\(/g, '$1*(')
       .replace(/\)([0-9a-zA-Z])/g, ')*$1');
