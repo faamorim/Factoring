@@ -801,23 +801,66 @@ window.Generators = (() => {
     // Hints — single source of truth for all grouping problems
     const firstPairTerms  = formatPolynomial([t1, t2]);
     const secondPairTerms = formatPolynomial([t3, t4]);
-    const hint1 = `The first two terms are ${firstPairTerms}. Factor out their GCF and write the full result in the form GCF(binomial).`;
-    const hint2 = `The last two terms are ${secondPairTerms}. Factor out their GCF and write the full result in the form GCF(binomial). The binomial inside must match the first pair's binomial.`;
-    const hint3 = `Both pairs share a common binomial factor. Look at what's inside the parentheses — what binomial appears in both?`;
-    const hint4 = `Write the common binomial (${commonBinomial}) times the remaining factor (${factor2}).`;
+    const t1Text          = formatPolynomial([t1]);
+    const t3Text          = formatPolynomial([t3]);
 
     // Combined pairs step: write both factored pairs joined by operator
     // Sign comes from secondGCFCoeff — positive → '+', negative → '−'
-    const combinedSign       = secondGCFCoeff >= 0 ? '+' : '−';
-    const combinedPairs      = `${firstPairResult} ${combinedSign} ${secondGCFCoeff < 0 ? secondGCFText.slice(1) : secondGCFText}(${commonBinomial})`;
-    const hint2b = `Write both factored pairs next to each other, separated by the appropriate sign. You should see the same binomial appearing in both.`;
+    const combinedSign  = secondGCFCoeff >= 0 ? '+' : '−';
+    const combinedPairs = `${firstPairResult} ${combinedSign} ${secondGCFCoeff < 0 ? secondGCFText.slice(1) : secondGCFText}(${commonBinomial})`;
+    const addOrSubtract = secondGCFCoeff >= 0 ? 'addition' : 'subtraction';
 
     const groupingWorkflow = [
-      { id: 'first-pair-gcf',  label: 'Factor the GCF from the first two terms — write as GCF(binomial)', hint: hint1,  expected: firstPairResult },
-      { id: 'second-pair-gcf', label: 'Factor the GCF from the last two terms — write as GCF(binomial)',  hint: hint2,  expected: secondPairResult },
-      { id: 'combined-pairs',  label: 'Write both factored pairs together',                                hint: hint2b, expected: combinedPairs },
-      { id: 'common-binomial', label: 'Identify the common binomial factor',                               hint: hint3,  expected: commonBinomial },
-      { id: 'final',           label: 'Write the factored form',                                           hint: hint4,  expected: answer }
+      {
+        id: 'first-pair-gcf',
+        label: 'Factor the GCF from the first two terms — write as GCF(binomial)',
+        hints: [
+          `The first pair is ${firstPairTerms}. Find its GCF.`,
+          `The GCF follows the sign of the leading term of the pair, which is ${t1Text}.`,
+          `Write your answer as GCF(binomial) — what do you get when you divide ${firstPairTerms} by ${firstGCFText}?`,
+          `The GCF of ${firstPairTerms} is ${firstGCFText}. Dividing gives (${commonBinomial}), so the factored pair is ${firstPairResult}.`
+        ],
+        expected: firstPairResult
+      },
+      {
+        id: 'second-pair-gcf',
+        label: 'Factor the GCF from the last two terms — write as GCF(binomial)',
+        hints: [
+          `The second pair is ${secondPairTerms}. Find its GCF.`,
+          `The GCF follows the sign of the leading term of the pair, which is ${t3Text}.`,
+          `Write your answer as GCF(binomial) — what do you get when you divide ${secondPairTerms} by ${secondGCFText}?`,
+          `The GCF of ${secondPairTerms} is ${secondGCFText}. Dividing gives (${commonBinomial}), so the factored pair is ${secondPairResult}.`
+        ],
+        expected: secondPairResult
+      },
+      {
+        id: 'combined-pairs',
+        label: 'Write both factored pairs together',
+        hints: [
+          `Write the two factored pairs side by side connected by a single sign. The GCF of the second pair is ${secondGCFText}, so we write it as an ${addOrSubtract}.`,
+          `Because the two factored pairs are ${firstPairResult} and ${secondPairResult}, and the second GCF is ${secondGCFText}, we write it as an ${addOrSubtract}: ${combinedPairs}.`
+        ],
+        expected: combinedPairs
+      },
+      {
+        id: 'common-binomial',
+        label: 'Identify the common binomial factor',
+        hints: [
+          `Look at what the two factored pairs have in common. Is the expression inside the parentheses the same?`,
+          `Both ${firstPairResult} and ${secondPairResult} contain the same binomial factor: ${commonBinomial}.`
+        ],
+        expected: commonBinomial
+      },
+      {
+        id: 'final',
+        label: 'Write the factored form',
+        hints: [
+          `The common binomial can be factored out, just like factoring out a GCF — the remaining terms become the second factor.`,
+          `Think of (${commonBinomial}) as a single unit. Taking it out of ${firstPairResult} leaves ${firstGCFText}, and out of ${secondPairResult} leaves ${secondGCFText}.`,
+          `Factoring out (${commonBinomial}) leaves (${firstGCFText} + ${secondGCFText}) as the second factor, giving the factored form ${answer}.`
+        ],
+        expected: answer
+      }
     ];
 
     const groupingSteps = [{
