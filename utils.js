@@ -89,8 +89,10 @@ window.Utils = (() => {
 
   function rawToPretty(raw) {
     return raw
-      .replace(/\^$/g, '\uE000')   // bare caret → private sentinel (converted before ^digits)
+      .replace(/([0-9xy)])([+\-])/g, '$1 $2')          // space before operator
+      .replace(/(?<!\()([+\-])([0-9xy(])/g, '$1 $2')  // space after operator (not after opening bracket)
       .replace(/\^([0-9]+)/g, (_, digits) => [...digits].map(d => superscriptMap[d] || d).join(''))
+      .replace(/\^$/g, '\uE000')   // bare caret → private sentinel (must come after ^digits)
       .replace(/-/g, '−');
   }
 

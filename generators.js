@@ -1093,7 +1093,8 @@ window.Generators = (() => {
 
     // Step: find the pair
     const product    = couldBeGeneral ? A * C : C;
-    const pairSorted = [p, q].slice().sort((x, y) => x - y).join(', ');
+    // Canonical order: larger absolute value first, to match the rewrite step convention.
+    const pairSorted = [p, q].slice().sort((x, y) => Math.abs(y) - Math.abs(x)).join(', ');
 
     // Factor pair listing utility — returns all pairs [a,b] where a*b = |product|, a <= b
     function absFactorPairs(n) {
@@ -1147,8 +1148,8 @@ window.Generators = (() => {
     const hint4 = `With those signs, the factor pairs of ${Math.abs(product)} to check are: ${signedFactorPairs(product, B)}. Which pair adds to ${B}?`;
 
     // Hint 5 — verify (the 169 move — give the pair, let them confirm)
-    // When signs differ, lead with the negative factor (the trickier one)
-    const [pSorted, qSorted] = [p, q].sort((a, b) => a - b);
+    // Order matches pairSorted: larger absolute value first.
+    const [pSorted, qSorted] = [p, q].slice().sort((a, b) => Math.abs(b) - Math.abs(a));
     const hint5 = `Try the pair (${pSorted}, ${qSorted}): does ${pSorted} × ${qSorted} = ${product}? Does ${pSorted} + ${qSorted} = ${B}?`;
 
     // Hint 6 — reasoning → result
@@ -1203,23 +1204,37 @@ window.Generators = (() => {
       // the correct term order: acx² + adx + bcx + bd (p=ad first, q=bc second).
       // allowNegative flags must be false when passing pinned values — the sign
       // is already baked into the value, and the flag would randomly flip it.
-      const groupLayer = generateGroupingLayer({
-        aRange: [c, c], aXExponent: xExponent, allowNegativeA: false,
-        bRange: [d, d],                         allowNegativeB: false,
-        cRange: [a, a], cXExponent: xExponent,
-        dRange: [b, b],                         allowNegativeD: false, dYExponent: 0,
-        skipValidation: true
-      });
+      // Canonical split order: larger absolute value first.
+      // This ensures the grouping hints always match the student's expected input.
+      const [pFirst, qSecond] = Math.abs(p) >= Math.abs(q) ? [p, q] : [q, p];
+
+      // groupLayer pins: pFirst = a*d comes from (cx+d)(ax+b) with c,d first.
+      // If we swapped, pFirst is q = b*c, which comes from (ax+b)(cx+d) — swap the pairs.
+      const groupLayer = Math.abs(p) >= Math.abs(q)
+        ? generateGroupingLayer({
+            aRange: [c, c], aXExponent: xExponent, allowNegativeA: false,
+            bRange: [d, d],                         allowNegativeB: false,
+            cRange: [a, a], cXExponent: xExponent,
+            dRange: [b, b],                         allowNegativeD: false, dYExponent: 0,
+            skipValidation: true
+          })
+        : generateGroupingLayer({
+            aRange: [a, a], aXExponent: xExponent, allowNegativeA: false,
+            bRange: [b, b],                         allowNegativeB: false,
+            cRange: [c, c], cXExponent: xExponent,
+            dRange: [d, d],                         allowNegativeD: false, dYExponent: 0,
+            skipValidation: true
+          });
 
       const splitExpr = groupLayer.expression;
 
       workflow.push({
         id: 'rewrite',
-        label: `Rewrite the middle term using your two integers as separate x-terms`,
+        label: `Rewrite the middle term using your two integers as separate x-terms (larger absolute value first)`,
         hints: [
           `The middle term can be split into two separate x-terms using the integers you found. The first and last terms stay unchanged.`,
-          `Replace ${B}x with ${p}x + ${q}x, keeping the rest of the expression the same.`,
-          `Splitting ${B}x into ${p}x + ${q}x gives you: ${splitExpr}.`
+          `Replace ${B}x with ${pFirst}x + ${qSecond}x, keeping the rest of the expression the same.`,
+          `Splitting ${B}x into ${pFirst}x + ${qSecond}x gives you: ${splitExpr}.`
         ],
         expected: splitExpr
       });

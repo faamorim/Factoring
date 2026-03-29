@@ -131,6 +131,20 @@ deliberately deferred and why.
   hint2 = sign conclusion (both negative / opposite signs / larger has sign of b),
   hint3 = one of the two factors explicitly.
 
+- **Input-dependent hint branching** — some steps have multiple equally valid
+  answers that lead to different grouping paths (e.g. the `rewrite` step in
+  General Trinomial: `15x + 2x` and `2x + 15x` are both correct splits but
+  imply different first/second pairs for the grouping steps that follow).
+  Currently the generator forces a canonical order and hints match that order.
+  Planned: generator pre-computes hint arrays for each valid branch and stamps
+  the step with a `hintSelector` object containing the input field id and a
+  pure comparison function. At hint-reveal time the render layer calls
+  `step.hintSelector.fn(studentInput)` to get the branch key, then looks up
+  `step.hints[key][revealedCount]`. Generator owns all domain logic; render
+  layer is completely dumb — it just calls the function and uses the result.
+  `hints` shape extends from `string[]` (single branch, current) to
+  `{ [key]: string[] }` (multi-branch) with `hintSelector` present.
+
 - **Radio option narrowing via hints** — Mixed Method and Full Factoring
   identification steps currently show only the valid options for that expression
   (e.g. a binomial only gets DoS / "can't factor"). Planned: start with all
