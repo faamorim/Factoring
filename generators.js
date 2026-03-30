@@ -100,25 +100,47 @@ window.Generators = (() => {
       {
         id: 'numeric-gcf',
         label: 'Find the numeric GCF',
-        hint: numericHint,
+        hints: [
+          `Find the largest integer that divides evenly into all the coefficients.`,
+          `The coefficients are ${coefficients.join(', ')}. What is their GCF?`,
+          `The GCF of ${coefficients.join(', ')} is ${numericGCF}.`
+        ],
         expected: String(numericGCF)
       },
       {
         id: 'variable-gcf',
         label: 'Find the variable GCF',
-        hint: variableHint,
+        hints: [
+          variableGCFText === '1' && !yAppearsInProblem
+            ? `Check if any variable appears in every term — if not, the variable GCF is 1.`
+            : `The variable GCF is the lowest power of each variable that appears in every term.`,
+          variableGCFText === '1' && !yAppearsInProblem
+            ? `No variable appears in all terms, so the variable GCF is 1.`
+            : `X exponents: ${xExpList}.${yExpList}${yGCFNote} Take the lowest of each.`,
+          `The variable GCF is ${variableGCFText}.`
+        ],
         expected: variableGCFText
       },
       {
         id: 'total-gcf',
         label: 'Multiply the numeric and variable GCF to get the total GCF',
-        hint: totalGCFHint,
+        hints: [
+          `The total GCF is the product of the numeric GCF and the variable GCF.`,
+          variableGCFText === '1'
+            ? `The numeric GCF is ${numericGCF} and there is no variable GCF, so the total GCF is just ${numericGCF}.`
+            : `Multiply the numeric GCF (${numericGCF}) by the variable GCF (${variableGCFText}).`,
+          `The total GCF is ${totalGCF}.`
+        ],
         expected: totalGCF
       },
       {
         id: 'inside',
         label: 'Divide the expression by the total GCF to find what goes inside the parentheses',
-        hint: insideHint,
+        hints: [
+          `Divide every term of the expression by the total GCF. What is left inside the parentheses?`,
+          `Take each term of ${expression} and divide its coefficient and variables by ${totalGCF}.`,
+          `Dividing ${expression} by ${totalGCF} gives ${insideExpression}, so the answer is ${answer}.`
+        ],
         expected: insideExpression
       }
     ];
@@ -325,9 +347,38 @@ window.Generators = (() => {
     const finalHint = `Write (A + B)(A − B) where A = ${aRootTermText} and B = ${bRootTermText}.`;
 
     const dosWorkflow = [
-      { id: 'first-root',  label: 'Find the square root of the first term',  hint: firstTermHint,  expected: aRootTermText },
-      { id: 'second-root', label: 'Find the square root of the second term', hint: secondTermHint, expected: bRootTermText },
-      { id: 'final',       label: 'Write the factored form (A + B)(A − B)',  hint: finalHint,      expected: answer }
+      {
+        id: 'first-root',
+        label: 'Find the square root of the first term',
+        hints: [
+          `The first term is a perfect square. What expression, when squared, gives ${firstTermDesc}?`,
+          `${firstTermDesc} = (${aRootTermText})². What is its square root?`,
+          `The square root of ${firstTermDesc} is ${aRootTermText}.`
+        ],
+        expected: aRootTermText
+      },
+      {
+        id: 'second-root',
+        label: 'Find the square root of the second term',
+        hints: [
+          `The second term is also a perfect square. What number or expression, when squared, gives ${secondTermDesc}?`,
+          useY
+            ? `${secondTermDesc} = (${bRootTermText})². What is its square root?`
+            : `${b} = ${bRootTermText}². What is the square root?`,
+          `The square root of ${secondTermDesc} is ${bRootTermText}.`
+        ],
+        expected: bRootTermText
+      },
+      {
+        id: 'final',
+        label: 'Write the factored form (A + B)(A − B)',
+        hints: [
+          `A difference of squares A² − B² always factors as (A + B)(A − B).`,
+          `Here A = ${aRootTermText} and B = ${bRootTermText}. Write (A + B)(A − B).`,
+          `The factored form is (${aRootTermText} + ${bRootTermText})(${aRootTermText} − ${bRootTermText}).`
+        ],
+        expected: answer
+      }
     ];
 
     const dosSteps = [{
@@ -412,11 +463,58 @@ window.Generators = (() => {
     const finalHint     = `Use the sign from the previous step. Write (first_root ± last_root)² with the correct sign between the roots.`;
 
     const pstWorkflow = [
-      { id: 'first-root',    label: 'Find the square root of the first term',                             hint: firstRootHint, expected: aRootText    },
-      { id: 'last-root',     label: 'Find the square root of the last term (always positive)',             hint: lastRootHint,  expected: bRootText    },
-      { id: 'verify-middle', label: 'Verify: 2 × first_root × last_root matches the middle term (ignore its sign)', hint: verifyHint, expected: expectedMiddleAbs },
-      { id: 'middle-sign',   label: 'What is the sign of the middle term?',                               hint: signHint,      expected: middleSign   },
-      { id: 'final',         label: 'Write the factored form (first_root ± last_root)²',                  hint: finalHint,     expected: answer       }
+      {
+        id: 'first-root',
+        label: 'Find the square root of the first term',
+        hints: [
+          `The first term is a perfect square. What expression, when squared, gives ${firstTermDesc}?`,
+          `${firstTermDesc} = (${aRootText})². What is its square root?`,
+          `The square root of ${firstTermDesc} is ${aRootText}.`
+        ],
+        expected: aRootText
+      },
+      {
+        id: 'last-root',
+        label: 'Find the square root of the last term (always positive)',
+        hints: [
+          `The last term is a perfect square. Square roots are always positive here.`,
+          useY
+            ? `${lastTermDesc} = (${bRootText})². What is its square root?`
+            : `${constCoeff} = ${bRootText}². What is the square root?`,
+          `The square root of ${lastTermDesc} is ${bRootText}.`
+        ],
+        expected: bRootText
+      },
+      {
+        id: 'verify-middle',
+        label: 'Verify: 2 × first_root × last_root matches the middle term (ignore its sign)',
+        hints: [
+          `In a perfect square trinomial, the middle term is always 2 × first_root × last_root.`,
+          `Calculate 2 × ${aRootText} × ${bRootText}. Enter the result as a positive value — we check the sign separately.`,
+          `2 × ${aRootText} × ${bRootText} = ${expectedMiddleAbs}.`
+        ],
+        expected: expectedMiddleAbs
+      },
+      {
+        id: 'middle-sign',
+        label: 'What is the sign of the middle term?',
+        hints: [
+          `Look at the middle term of the original expression. Is it positive or negative? Enter + or −.`,
+          `The middle term is ${middleTermDesc}. What is its sign?`,
+          `The middle term is ${middleTermDesc}, so the sign is ${middleSign}.`
+        ],
+        expected: middleSign
+      },
+      {
+        id: 'final',
+        label: 'Write the factored form (first_root ± last_root)²',
+        hints: [
+          `A perfect square trinomial always factors as (first_root ± last_root)². Use the sign from the previous step.`,
+          `The first root is ${aRootText}, the last root is ${bRootText}, and the sign is ${bSign}. Write (${aRootText} ${bSign} ${bRootText})².`,
+          `The factored form is (${aRootText} ${bSign} ${bRootText})².`
+        ],
+        expected: answer
+      }
     ];
 
     const pstSteps = [{
