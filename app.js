@@ -1,7 +1,7 @@
 (() => {
   const { compareFactored, normalizeRaw, rawToPretty, generateSeed, setSeed, clearSeed } = window.Utils;
   const { generateProblem } = window.Generators;
-  const { insertIntoActiveInput } = window.InputController;
+  const { insertIntoActiveInput, selectInput } = window.InputController;
   const {
     renderFeedback,
     renderKeypad,
@@ -175,130 +175,93 @@
     return { stepCorrect, stepFilled, fieldStatuses };
   }
 
-  function evaluateGuidedSteps(revealHint) {
-    const workflow = state.currentProblem.workflow;
-    let firstWrongIndex = -1;
+  // Evaluates the full guided workflow in a single pass.
+  // Returns a result object — does NOT modify state.
+  // Statuses: 'correct' | 'incorrect' | 'empty' | 'partial' | 'downstream' | 'locked'
+  // - partial: pair step with only one field filled
+  // - downstream: filled but after the first wrong step (may be wrong for unrelated reasons)
+  // firstNeedsAttention: first step in workflow order that is not 'correct' or 'locked'
+  // shouldRedirect: true when firstNeedsAttention is wrong (not empty/partial) and not active
+  function evaluateWorkflow() {
+    const workflow = state.currentProblem?.workflow;
+    if (!workflow) return null;
 
-    // Pass 1: find the first filled+wrong step (skip locked and radio steps)
-    workflow.forEach((step, index) => {
-      if (step.gatedBy && state.stepStatuses[step.gatedBy] !== 'correct') return;
-      if (step.inputType === 'pair') {
-        const { stepCorrect, stepFilled } = checkPairStep(step);
-        if (stepFilled && !stepCorrect && firstWrongIndex === -1) firstWrongIndex = index;
-        return;
-      }
-      if (step.inputType === 'radio') {
-        return; // handled on click
-      }
-      const raw = state.inputValues[step.id]?.raw || '';
-      if (raw.trim() !== '' && !compareAnswers(raw, step.expected)) {
-        if (firstWrongIndex === -1) firstWrongIndex = index;
-      }
-    });
+    const stepStatuses = {};
+    const pairFieldStatuses = {};
+    let firstWrong = null;
+    let firstNeedsAttention = null;
 
-    // Pass 2: assign statuses (skip locked and radio steps)
-    workflow.forEach((step, index) => {
-      if (step.gatedBy && state.stepStatuses[step.gatedBy] !== 'correct') return;
-      if (step.inputType === 'radio') {
-        return; // handled on click
-      }
-      if (step.inputType === 'pair') {
-        const { stepCorrect, stepFilled, fieldStatuses } = checkPairStep(step);
-        Object.assign(state.pairFieldStatuses, fieldStatuses);
-        if (!stepFilled) {
-          state.stepStatuses[step.id] = 'empty';
-        } else if (firstWrongIndex === -1 || index < firstWrongIndex) {
-          state.stepStatuses[step.id] = stepCorrect ? 'correct' : 'incorrect';
-          if (!stepCorrect && firstWrongIndex === -1) firstWrongIndex = index;
-        } else if (index === firstWrongIndex) {
-          state.stepStatuses[step.id] = 'incorrect';
-        } else {
-          state.stepStatuses[step.id] = 'downstream';
-        }
-        return;
-      }
+    workflow.forEach((step) => {
+      // Locked steps — gating step not yet correct
+      if (step.gatedBy && (stepStatuses[step.gatedBy] ?? state.stepStatuses[step.gatedBy]) !== 'correct') {
+        stepStatuses[step.id] = 'locked';
 
-      const raw = state.inputValues[step.id]?.raw || '';
-      const filled = raw.trim() !== '';
+      // Radio steps — status managed on click
+      } else if (step.inputType === 'radio') {
+        stepStatuses[step.id] = state.stepStatuses[step.id] ?? 'empty';
 
-      if (!filled) {
-        state.stepStatuses[step.id] = 'empty';
-        return;
-      }
-
-      if (firstWrongIndex === -1) {
-        state.stepStatuses[step.id] = 'correct';
-      } else if (index < firstWrongIndex) {
-        state.stepStatuses[step.id] = 'correct';
-      } else if (index === firstWrongIndex) {
-        state.stepStatuses[step.id] = 'incorrect';
-      } else {
-        state.stepStatuses[step.id] = 'downstream';
-      }
-    });
-
-    const blankSteps = workflow.filter((step) => {
-      // Locked steps don't count as blank — student can't fill them yet
-      if (step.gatedBy && state.stepStatuses[step.gatedBy] !== 'correct') return false;
-      if (step.inputType === 'pair') {
+      // Pair steps
+      } else if (step.inputType === 'pair') {
+        const { stepCorrect, fieldStatuses } = checkPairStep(step);
+        Object.assign(pairFieldStatuses, fieldStatuses);
         const rawA = state.inputValues[`${step.id}-a`]?.raw?.trim();
         const rawB = state.inputValues[`${step.id}-b`]?.raw?.trim();
-        return !rawA && !rawB;
-      }
-      if (step.inputType === 'radio') {
-        return state.stepStatuses[step.id] !== 'correct';
-      }
-      return !(state.inputValues[step.id]?.raw?.trim());
-    });
-    const allFilled = blankSteps.length === 0;
+        const partial = (!!rawA) !== (!!rawB); // exactly one filled
 
-    if (firstWrongIndex === -1 && allFilled) {
-      // Everything correct and complete
-      render();
-      setFeedback('Excellent! Every step is correct.', 'success');
-      return;
-    }
+        if (!rawA && !rawB)   stepStatuses[step.id] = 'empty';
+        else if (partial)     stepStatuses[step.id] = 'partial';
+        else if (firstWrong)  stepStatuses[step.id] = 'downstream';
+        else if (stepCorrect) stepStatuses[step.id] = 'correct';
+        else                  stepStatuses[step.id] = 'incorrect';
 
-    if (firstWrongIndex === -1 && !allFilled) {
-      // Everything filled so far is correct, but some steps are still blank
-      render();
-      if (revealHint) {
-        const firstBlank = blankSteps[0];
-        const hintLevels = firstBlank.hints?.length ?? 1;
-        const current = state.revealedHints[firstBlank.id] || 0;
-        if (current < hintLevels) {
-          state.revealedHints[firstBlank.id] = current + 1;
-          state.justRevealedHintFor = firstBlank.id;
-        }
-        render();
-        state.justRevealedHintFor = null;
-        setFeedback(`Looking good so far! Hint added to the next step.`, 'info');
-        setTimeout(() => pulseStep(firstBlank.id), 50);
+      // Standard text input
       } else {
-        const remaining = blankSteps.length;
-        setFeedback(`Looking good so far — ${remaining} step${remaining > 1 ? 's' : ''} still to go.`, 'info');
+        const raw = state.inputValues[step.id]?.raw?.trim() || '';
+        if (!raw)                                    stepStatuses[step.id] = 'empty';
+        else if (firstWrong)                         stepStatuses[step.id] = 'downstream';
+        else if (compareAnswers(raw, step.expected)) stepStatuses[step.id] = 'correct';
+        else                                         stepStatuses[step.id] = 'incorrect';
       }
-      return;
-    }
 
-    // There is a wrong step
-    const wrongStep = workflow[firstWrongIndex];
-    if (revealHint) {
-      const hintLevels = wrongStep.hints?.length ?? 1;
-      const current = state.revealedHints[wrongStep.id] || 0;
-      if (current < hintLevels) {
-        state.revealedHints[wrongStep.id] = current + 1;
-        state.justRevealedHintFor = wrongStep.id;
+      // Track first wrong step
+      if (stepStatuses[step.id] === 'incorrect') {
+        firstWrong = firstWrong ?? step;
       }
-    }
+
+      // Track first step needing attention — any non-correct, non-locked step
+      if (stepStatuses[step.id] !== 'correct' && stepStatuses[step.id] !== 'locked' && !firstNeedsAttention) {
+        firstNeedsAttention = step;
+      }
+    });
+
+    const allCorrect = Object.values(stepStatuses).every(s => s === 'correct' || s === 'locked');
+    const shouldRedirect = firstWrong !== null &&
+      firstWrong === firstNeedsAttention &&
+      !stepIsActive(firstWrong);
+
+    return { stepStatuses, pairFieldStatuses, firstWrong, firstNeedsAttention, allCorrect, shouldRedirect };
+  }
+
+  // Returns true if the given step is the currently active input.
+  function stepIsActive(step) {
+    return state.activeInputId === step.id ||
+      state.activeInputId === `${step.id}-a` ||
+      state.activeInputId === `${step.id}-b`;
+  }
+
+  // Commits evaluated statuses to state and triggers a render.
+  function commitAndRender(result) {
+    Object.assign(state.stepStatuses, result.stepStatuses);
+    Object.assign(state.pairFieldStatuses, result.pairFieldStatuses);
     render();
-    state.justRevealedHintFor = null;
-    if (revealHint) {
-      setFeedback('Hint added to the incorrect step.', 'info');
-    } else {
-      setFeedback('One step needs attention — check the highlighted field.', 'error');
-    }
-    setTimeout(() => pulseStep(wrongStep.id), 50);
+  }
+
+  // Redirects attention to the first step needing attention.
+  function redirectToStep(step) {
+    const inputId = step.inputType === 'pair' ? `${step.id}-a` : step.id;
+    selectInput(state, inputId, render);
+    setFeedback('There is an error in an earlier step — it has been highlighted.', 'error');
+    setTimeout(() => pulseStep(step.id), 50);
   }
 
   function checkAnswers() {
@@ -309,9 +272,24 @@
 
     if (state.settings.mode === 'final') {
       checkFinalAnswer();
-    } else {
-      evaluateGuidedSteps(false);
+      return;
     }
+
+    const result = evaluateWorkflow();
+    if (!result) return;
+    commitAndRender(result);
+
+    if (result.allCorrect) {
+      setFeedback('Excellent! Every step is correct.', 'success');
+      return;
+    }
+
+    const target = result.firstNeedsAttention;
+    if (!target) return;
+    const isWrong = result.firstWrong !== null;
+    selectInput(state, target.inputType === 'pair' ? `${target.id}-a` : target.id, render);
+    setFeedback(isWrong ? 'One step needs attention — check the highlighted field.' : 'Looking good so far — keep going!', isWrong ? 'error' : 'info');
+    setTimeout(() => pulseStep(target.id), 50);
   }
 
   function showHint() {
@@ -320,21 +298,50 @@
       return;
     }
 
-    if (state.settings.mode === 'guided') {
-      evaluateGuidedSteps(true);
+    if (state.settings.mode === 'final') {
+      // Final answer mode: progressive hints, one per click, in workflow order
+      const workflow = state.currentProblem.workflow;
+      const hintsShown = state.revealedHints['final-answer'] || 0;
+      if (hintsShown >= workflow.length) {
+        setFeedback('All hints have been shown. Try Show Solution if you are still stuck.', 'info');
+        return;
+      }
+      state.revealedHints['final-answer'] = hintsShown + 1;
+      render();
+      setFeedback(`Hint ${hintsShown + 1} of ${workflow.length} added below.`, 'info');
       return;
     }
 
-    // Final answer mode: progressive hints, one per click, in workflow order
-    const workflow = state.currentProblem.workflow;
-    const hintsShown = state.revealedHints['final-answer'] || 0;
-    if (hintsShown >= workflow.length) {
-      setFeedback('All hints have been shown. Try Show Solution if you are still stuck.', 'info');
+    const result = evaluateWorkflow();
+    if (!result) return;
+    commitAndRender(result);
+
+    if (result.allCorrect) {
+      setFeedback('Excellent! Every step is correct.', 'success');
       return;
     }
-    state.revealedHints['final-answer'] = hintsShown + 1;
+
+    const target = result.firstNeedsAttention;
+    if (!target) return;
+
+    if (result.shouldRedirect) {
+      redirectToStep(result.firstWrong);
+      return;
+    }
+
+    // Reveal/progress hint on target step
+    const hintLevels = target.hints?.length ?? 1;
+    const current = state.revealedHints[target.id] || 0;
+    if (current < hintLevels) {
+      state.revealedHints[target.id] = current + 1;
+      state.justRevealedHintFor = target.id;
+    }
     render();
-    setFeedback(`Hint ${hintsShown + 1} of ${workflow.length} added below.`, 'info');
+    state.justRevealedHintFor = null;
+    const isWrong = result.stepStatuses[target.id] === 'incorrect';
+    selectInput(state, target.inputType === 'pair' ? `${target.id}-a` : target.id, render);
+    setFeedback(isWrong ? 'Hint added to the incorrect step.' : 'Looking good so far! Hint added to the next step.', 'info');
+    setTimeout(() => pulseStep(target.id), 50);
   }
 
   function solveNextStep() {
@@ -350,14 +357,21 @@
       return;
     }
 
-    const nextStep = state.currentProblem.workflow.find((step) => {
-      if (step.gatedBy && state.stepStatuses[step.gatedBy] !== 'correct') return false;
-      if (step.inputType === 'radio') return state.stepStatuses[step.id] !== 'correct';
-      if (step.inputType === 'pair') {
-        return !(state.inputValues[`${step.id}-a`]?.raw) || !(state.inputValues[`${step.id}-b`]?.raw);
-      }
-      return !(state.inputValues[step.id]?.raw);
-    });
+    const result = evaluateWorkflow();
+    if (!result) return;
+    commitAndRender(result);
+
+    if (result.allCorrect) {
+      setFeedback('All guided fields are already filled.', 'info');
+      return;
+    }
+
+    if (result.shouldRedirect) {
+      redirectToStep(result.firstWrong);
+      return;
+    }
+
+    const nextStep = result.firstNeedsAttention;
     if (!nextStep) {
       setFeedback('All guided fields are already filled.', 'info');
       return;

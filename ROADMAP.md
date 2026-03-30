@@ -131,6 +131,14 @@ deliberately deferred and why.
   hint2 = sign conclusion (both negative / opposite signs / larger has sign of b),
   hint3 = one of the two factors explicitly.
 
+- **Two-click redirect for wrong steps** — when Hint or Solve Step is pressed
+  and an earlier step is wrong but not active, the first click currently
+  redirects immediately to the wrong step. Planned: first click shows a message
+  ("There is a mistake in an earlier step. Click again to see where.") without
+  redirecting; second click focuses and highlights the wrong step. Requires a
+  small piece of state (`state.pendingRedirectTo`) that the second click acts on.
+  More respectful of the student's current mental context.
+
 - **Input-dependent hint branching** — some steps have multiple equally valid
   answers that lead to different grouping paths (e.g. the `rewrite` step in
   General Trinomial: `15x + 2x` and `2x + 15x` are both correct splits but
