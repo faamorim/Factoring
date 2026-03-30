@@ -101,7 +101,7 @@ window.Renderer = (() => {
       // A step is locked if its gating step hasn't been answered correctly yet.
       // Locked steps are not rendered at all — hiding them is the point.
       const isLocked = step.gatedBy
-        ? state.stepStatuses[step.gatedBy] !== 'correct'
+        ? !['correct', 'silent-correct'].includes(state.stepStatuses[step.gatedBy])
         : false;
       if (isLocked) return;
 
@@ -138,7 +138,7 @@ window.Renderer = (() => {
                 // Scroll to next visible (non-locked, non-answered) step
                 const nextStep = state.currentProblem.workflow.find(s =>
                   s.id !== step.id &&
-                  !(s.gatedBy && state.stepStatuses[s.gatedBy] !== 'correct') &&
+                  !(s.gatedBy && !['correct', 'silent-correct'].includes(state.stepStatuses[s.gatedBy])) &&
                   !(state.inputValues[s.id]?.raw?.trim()) &&
                   state.stepStatuses[s.id] !== 'correct'
                 );

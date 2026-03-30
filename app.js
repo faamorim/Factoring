@@ -193,7 +193,7 @@
 
     workflow.forEach((step) => {
       // Locked steps — gating step not yet correct
-      if (step.gatedBy && (stepStatuses[step.gatedBy] ?? state.stepStatuses[step.gatedBy]) !== 'correct') {
+      if (step.gatedBy && !['correct', 'silent-correct'].includes(stepStatuses[step.gatedBy] ?? state.stepStatuses[step.gatedBy])) {
         stepStatuses[step.id] = 'locked';
 
       // Radio steps — status managed on click
@@ -434,11 +434,45 @@
     renderProblem(state, elements);
     renderWorkArea(state, elements, render);
     renderFeedback(state, elements);
-    renderKeypad(state, elements, (value) => insertIntoActiveInput(state, value, { render, setFeedback }));
+    renderKeypad(state, elements, (value) => { insertIntoActiveInput(state, value, { render, setFeedback }); silentEvaluateActiveStep(); });
     renderKeypadStatus(state, elements);
     renderStepsOutput(state, elements);
     if (elements.copyLinkBtn) {
       elements.copyLinkBtn.style.display = state.currentProblem ? 'inline-block' : 'none';
+    }
+  }
+
+  // Checks only the currently active step and sets 'silent-correct' if correct.
+  // Called on every input change — lightweight, no full evaluation, no colour changes.
+  function silentEvaluateActiveStep() {
+    if (!state.currentProblem || state.settings.mode !== 'guided') return;
+    const id = state.activeInputId;
+    if (!id) return;
+
+    // Find the step this input belongs to
+    const stepId = id.endsWith('-a') || id.endsWith('-b')
+      ? id.replace(/-[ab]$/, '')
+      : id;
+    const step = state.currentProblem.workflow.find(s => s.id === stepId);
+    if (!step || step.inputType === 'radio') return;
+
+    // Don't silently evaluate if already properly evaluated
+    const current = state.stepStatuses[stepId];
+    if (current === 'correct') return;
+
+    let isCorrect = false;
+    if (step.inputType === 'pair') {
+      const { stepCorrect, stepFilled } = checkPairStep(step);
+      isCorrect = stepFilled && stepCorrect;
+    } else {
+      const raw = state.inputValues[stepId]?.raw?.trim() || '';
+      isCorrect = raw !== '' && compareAnswers(raw, step.expected);
+    }
+
+    const newStatus = isCorrect ? 'silent-correct' : 'empty';
+    if (state.stepStatuses[stepId] !== newStatus) {
+      state.stepStatuses[stepId] = newStatus;
+      render();
     }
   }
 
