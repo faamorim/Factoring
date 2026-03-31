@@ -394,6 +394,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   min-height: 38px;
   font-size: 0.98rem;
   padding: 4px 6px;
+  touch-action: manipulation;
 }
 
 .keypad-grid button.key-utility { background: var(--key-utility); }

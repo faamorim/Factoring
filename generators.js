@@ -282,10 +282,17 @@ window.Generators = (() => {
       insideTerms
     });
 
-    const finalHint = `Write the total GCF (${layer.totalGCF}) followed by the inside expression in parentheses.`;
     const workflow = [
       ...layer.gcfWorkflow,
-      { id: 'final', label: 'Write the factored form', hint: finalHint, expected: layer.answer }
+      {
+        id: 'final',
+        label: 'Write the factored form',
+        hints: [
+          `Write the total GCF outside the brackets, and the inside expression in parentheses.`,
+          `The total GCF is ${layer.totalGCF} and the inside expression is ${layer.insideExpression}, giving ${layer.answer}.`
+        ],
+        expected: layer.answer
+      }
     ];
 
     return {
@@ -1415,6 +1422,49 @@ window.Generators = (() => {
   //   3. Optionally wrap everything with GCFLayer
   //   4. Build flat workflow with gatedBy links
   // ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
+  // buildMethodHints(method, isFactorable, expr)
+  //
+  // Shared hint builder for radio steps that ask the student to identify
+  // a factoring method. Used by both Full Factoring and Mixed Method.
+  // Returns a 3-level hints array: count terms → term count reasoning → method reasoning.
+  // ---------------------------------------------------------------------------
+  const methodTermCounts = { dos: 2, pst: 3, st: 3, gt: 3, grouping: 4 };
+
+  const methodTermCountHints = {
+    2: `With 2 terms, check if both could be perfect squares separated by a minus sign.`,
+    3: `With 3 terms, check if it could be a Perfect Square Trinomial (first and last terms perfect squares, middle = 2·√first·√last). If not, look at the leading coefficient — it could point to a Simple or General Trinomial.`,
+    4: `With 4 terms, check if they can be split into two pairs that share a common binomial factor.`
+  };
+
+  const methodReasoningHints = {
+    dos:      `Both terms are perfect squares separated by a minus sign — this is a Difference of Squares.`,
+    pst:      `The first and last terms are perfect squares and the middle term equals 2·√first·√last — this is a Perfect Square Trinomial.`,
+    st:       `3 terms with a leading coefficient of 1 — this is a Simple Trinomial.`,
+    gt:       `3 terms with a leading coefficient greater than 1 — this is a General Trinomial.`,
+    grouping: `4 terms that split into two pairs with a common binomial — this is Grouping.`
+  };
+
+  const methodIrreducibleHints = {
+    dos:      `This expression is not a difference of squares — check if both terms are perfect squares with a minus sign between them.`,
+    pst:      `This expression is not a perfect square trinomial — check if the middle term equals 2·√first·√last.`,
+    st:       `This trinomial cannot be factored over the integers.`,
+    gt:       `This trinomial cannot be factored over the integers.`,
+    grouping: `These 4 terms cannot be grouped into pairs with a common binomial factor.`
+  };
+
+  function buildMethodHints(method, isFactorable, expr) {
+    const termCount = methodTermCounts[method] || 2;
+    return [
+      `Count the number of terms in ${expr}.`,
+      methodTermCountHints[termCount] || `Look at the structure of ${expr}.`,
+      isFactorable
+        ? methodReasoningHints[method] || `This expression is factored using the ${method} method.`
+        : methodIrreducibleHints[method] || `${expr} cannot be factored further over the integers.`
+    ];
+  }
+
   function generateFullFactoringProblem(proficiency) {
 
     // --- Helpers ---
@@ -1455,7 +1505,10 @@ window.Generators = (() => {
         inputType: 'radio',
         label: 'Is there a GCF (other than 1)?',
         expected,
-        hint: 'Look at the coefficients of all terms. What is their GCF? Also check for any variable (x or y) that appears in every term.',
+        hints: [
+          `Look at the coefficients of all terms and check if any variable appears in every term.`,
+          `A GCF of 1 means nothing useful can be factored out — we only care about a GCF greater than 1. If no number greater than 1 divides all coefficients, and no variable appears in every term, the answer is no.`
+        ],
         options: [{ value: 'yes', label: 'Yes — factor out the GCF' }, { value: 'no', label: 'No GCF (other than 1)' }]
       };
       if (gatedBy) step.gatedBy = gatedBy;
@@ -1463,16 +1516,13 @@ window.Generators = (() => {
     }
 
     function makeMethodRadio(id, expr, method, isFactorable, gatedBy) {
-      const hint = isFactorable
-        ? `Count the terms in ${expr}. For 2 terms check if it's a difference of squares. For 3 terms check if it's a perfect square, then check the leading coefficient. For 4 terms try grouping.`
-        : `${expr} cannot be factored further over the integers. Check: is it a difference of squares? (both terms perfect squares with a minus sign) If not, it can't be factored.`;
       const step = {
         id,
         inputType: 'radio',
         label: `How can ${expr} be factored?`,
         expected: isFactorable ? method : 'cant',
-        hint,
-        options: isFactorable ? optionsForMethod(method) : optionsForMethod(method)
+        hints: buildMethodHints(method, isFactorable, expr),
+        options: optionsForMethod(method)
       };
       if (gatedBy) step.gatedBy = gatedBy;
       return step;
@@ -1480,7 +1530,13 @@ window.Generators = (() => {
 
     // "Write the full expression so far" step
     function makeWritten(id, label, expected, gatedBy) {
-      return { id, label, hint: `Rewrite the full expression using all factors found so far.`, expected, gatedBy };
+      return {
+        id, label, gatedBy, expected,
+        hints: [
+          `Combine all the factors found so far into a single expression.`,
+          `The completely factored form so far is: ${expected}.`
+        ]
+      };
     }
 
     // --- Proficiency configs ---
@@ -1863,21 +1919,10 @@ window.Generators = (() => {
       gt:       'General Trinomial'
     };
 
-    const identHint =
-      `Count the terms first:
-` +
-      `• 2 terms → likely Difference of Squares
-` +
-      `• 3 terms → check if it's a Perfect Square Trinomial (first and last terms are perfect squares, middle = 2·√first·√last). If not, is the leading coefficient 1? → Simple Trinomial. Greater than 1? → General Trinomial.
-` +
-      `• 4 terms → Grouping
-` +
-      `• Any → always check for a GCF first!`;
-
     const identStep = {
       id:        'identify-method',
       label:     'Identify the factoring method',
-      hint:      identHint,
+      hints:     buildMethodHints(method, true, inner.expression),
       expected:  method,
       inputType: 'radio',
       options:   Object.entries(methodNames).map(([value, label]) => ({ value, label }))

@@ -53,6 +53,14 @@ deliberately deferred and why.
 - **Negative leading coefficients** — changes the workflow steps
   (factor out −1 first). Future feature.
 
+- **Irreducible lookalike hint specificity** — when the lookalike generator
+  is implemented, it should pass a `reason` string to `buildMethodHints`
+  explaining specifically why the expression can't be factored (e.g. "sum of
+  squares, not difference", "coefficient 8 is not a perfect square").
+  `methodIrreducibleHints` currently uses generic language; a `reason`
+  parameter would let hint 3 be specific to the actual lookalike generated.
+  Generator owns the math, hint builder just interpolates the reason string.
+
 - **Irreducible lookalikes** — generate intentionally-unfactorable expressions
   that resemble factorable ones, for use in Mixed/FF identification steps at
   Proficient/Extending. Three strategies for DoS lookalikes:
@@ -164,6 +172,12 @@ deliberately deferred and why.
   disable methods inconsistent with that term count. Level 3+: narrow further
   (e.g. by leading coefficient or perfect square check). Generator knows the
   math and computes the full `disableAt` map at problem generation time.
+
+- **Toast notifications for feedback** — the feedback box is currently
+  always visible, taking up permanent space in the layout. Planned: hidden
+  by default, animates in when a message is set, stays ~2-3 seconds, then
+  fades out. Persistent messages stay until dismissed or next problem.
+  CSS animation + setTimeout. Frees layout space, more native on mobile.
 
 - **Progress tracking** — count of correct/incorrect per method and
   proficiency level, stored in localStorage. Simple session stats.
