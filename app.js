@@ -1,5 +1,6 @@
 (() => {
-  const { compareFactored, normalizeRaw, rawToPretty, generateSeed, setSeed, clearSeed } = window.Utils;
+  const { normalizeRaw, rawToPretty, generateSeed, setSeed, clearSeed } = window.Utils;
+  const { compareFactored } = window.FactoringUtils;
   const { generateProblem } = window.Generators;
   const { insertIntoActiveInput, selectInput } = window.InputController;
   const {

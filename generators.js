@@ -2,14 +2,19 @@ window.Generators = (() => {
   const {
     buildFromPrimes,
     choice,
-    formatFactorPiece,
-    formatSecondFactor,
-    formatPolynomial,
     gcdList,
     isPerfectSquare,
     pickNumbers,
     randInt
   } = window.Utils;
+
+  const {
+    compareFactored,
+    formatFactorPiece,
+    formatLinearFactor,
+    formatPolynomial,
+    formatSecondFactor
+  } = window.FactoringUtils;
 
 
   // ---------------------------------------------------------------------------

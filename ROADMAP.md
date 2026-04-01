@@ -195,6 +195,12 @@ deliberately deferred and why.
   like `?quiz=gcf:2,3,4,1|dos:2,3,4,1|st:1,2,2,1&seed=123456`.
   Problems would be navigable (next/previous) with progress tracking.
 
+- **QR code generator** — generate a QR code for the current problem or
+  quiz URL. Teacher projects it to the screen, students scan with their
+  phones. No backend needed — client-side library (e.g. qrcode.js from CDN)
+  takes the URL string and renders a canvas/SVG. Natural companion to the
+  quiz generator and shareable URLs already in place.
+
 - **Print / export** — three output modes, all from the same seed so
   a teacher can generate all three from one URL:
     - *Quiz* — problems only. No steps, no hints, no answers. Clean
