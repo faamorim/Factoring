@@ -31,7 +31,13 @@
     stepStatuses: {},
     pairFieldStatuses: {},
     revealedHints: {},
-    justRevealedHintFor: null
+    justRevealedHintFor: null,
+    // Step ids whose correctness has been explicitly confirmed (via Check,
+    // Solve Step, or a correct radio click) rather than just happening to
+    // match on the latest evaluateWorkflow pass. Distinguishes "I just typed
+    // the right answer and I'm not sure yet" from "this was already settled
+    // a while ago" — see capTargetToActiveStep.
+    confirmedSteps: {}
   };
 
   const elements = {
@@ -80,6 +86,7 @@
     state.stepStatuses = {};
     state.pairFieldStatuses = {};
     state.revealedHints = {};
+    state.confirmedSteps = {};
     setFeedback('New problem generated.', 'info');
     render();
     setTimeout(() => {
@@ -256,11 +263,47 @@
       state.activeInputId === `${step.id}-b`;
   }
 
+  // Caps a Hint/Solve-Step target at the step the student is actively working
+  // on, when that step comes earlier in the workflow than the natural
+  // firstNeedsAttention. Without this, retyping a correct-but-unconfirmed
+  // answer into the active step makes evaluateWorkflow treat it as done and
+  // skip straight to the next incomplete step — silently solving or hinting
+  // a step the student never asked about. Check is exempt: confirming the
+  // active step and moving attention past it is exactly its job.
+  //
+  // Only applies while the active step's correctness is NOT yet confirmed
+  // (see state.confirmedSteps). Without that check, a stale activeInputId
+  // left over from an earlier Check/Hint click — pointing at a step that's
+  // long since done — would keep re-capping to that old step forever and
+  // block progress to anything after it, including radio steps (which never
+  // become "active" on their own since they're answered by button click,
+  // not the keypad).
+  function capTargetToActiveStep(result) {
+    const workflow = state.currentProblem.workflow;
+    const activeStep = workflow.find(stepIsActive);
+    if (!activeStep) return result.firstNeedsAttention;
+    const activeStatus = result.stepStatuses[activeStep.id];
+    const alreadySettled = activeStatus === 'locked' || (activeStatus === 'correct' && state.confirmedSteps[activeStep.id]);
+    if (alreadySettled) return result.firstNeedsAttention;
+    const activeIdx = workflow.indexOf(activeStep);
+    const attentionIdx = result.firstNeedsAttention ? workflow.indexOf(result.firstNeedsAttention) : Infinity;
+    return activeIdx < attentionIdx ? activeStep : result.firstNeedsAttention;
+  }
+
   // Commits evaluated statuses to state and triggers a render.
   function commitAndRender(result) {
     Object.assign(state.stepStatuses, result.stepStatuses);
     Object.assign(state.pairFieldStatuses, result.pairFieldStatuses);
     render();
+  }
+
+  // Marks every currently-correct step as confirmed — this is what makes
+  // Check's "settle what's right, move attention past it" behavior stick,
+  // as opposed to Hint/Solve Step's target capping (see capTargetToActiveStep).
+  function confirmCorrectSteps(result) {
+    Object.keys(result.stepStatuses).forEach((id) => {
+      if (result.stepStatuses[id] === 'correct') state.confirmedSteps[id] = true;
+    });
   }
 
   // Redirects attention to the first step needing attention.
@@ -285,6 +328,7 @@
     const result = evaluateWorkflow();
     if (!result) return;
     commitAndRender(result);
+    confirmCorrectSteps(result);
 
     if (result.allCorrect) {
       setFeedback('Excellent! Every step is correct.', 'success');
@@ -331,13 +375,13 @@
       return;
     }
 
-    const target = result.firstNeedsAttention;
-    if (!target) return;
-
     if (result.shouldRedirect) {
       redirectToStep(result.firstWrong);
       return;
     }
+
+    const target = capTargetToActiveStep(result);
+    if (!target) return;
 
     // Reveal/progress hint on target step
     const hintLevels = target.hints?.length ?? 1;
@@ -349,8 +393,12 @@
     render();
     state.justRevealedHintFor = null;
     const isWrong = result.stepStatuses[target.id] === 'incorrect';
+    const isCurrentStep = stepIsActive(target);
     selectInput(state, target.inputType === 'pair' ? `${target.id}-a` : target.id, render);
-    setFeedback(isWrong ? 'Hint added to the incorrect step.' : 'Looking good so far! Hint added to the next step.', 'info');
+    setFeedback(
+      isWrong ? 'Hint added to the incorrect step.' : isCurrentStep ? 'Hint added to your current step.' : 'Looking good so far! Hint added to the next step.',
+      'info'
+    );
     setTimeout(() => pulseStep(target.id), 50);
   }
 
@@ -381,7 +429,7 @@
       return;
     }
 
-    const nextStep = result.firstNeedsAttention;
+    const nextStep = capTargetToActiveStep(result);
     if (!nextStep) {
       setFeedback('All guided fields are already filled.', 'info');
       return;
@@ -402,8 +450,10 @@
       state.inputValues[nextStep.id] = { raw: nextStep.expected, display: rawToPretty(nextStep.expected) };
     }
     state.stepStatuses[nextStep.id] = 'correct';
+    state.confirmedSteps[nextStep.id] = true;
     render();
     setFeedback(`Filled: ${nextStep.label}.`, 'info');
+    setTimeout(() => pulseStep(nextStep.id), 50);
   }
 
   function showFullSolution() {
@@ -426,6 +476,7 @@
         state.inputValues[step.id] = { raw: step.expected, display: rawToPretty(step.expected) };
       }
       state.stepStatuses[step.id] = 'correct';
+      state.confirmedSteps[step.id] = true;
     });
 
     if (state.settings.mode === 'final') {
@@ -471,6 +522,7 @@
     // green status on screen while the field now shows different content.
     if (state.stepStatuses[stepId] === 'correct') {
       state.stepStatuses[stepId] = 'empty';
+      delete state.confirmedSteps[stepId];
       if (step.inputType === 'pair') {
         delete state.pairFieldStatuses[`${stepId}-a`];
         delete state.pairFieldStatuses[`${stepId}-b`];

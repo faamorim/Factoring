@@ -134,6 +134,7 @@ window.Renderer = (() => {
               // Immediately evaluate so correct selection unlocks remaining steps
               if (opt.value === step.expected) {
                 state.stepStatuses[step.id] = 'correct';
+                state.confirmedSteps[step.id] = true;
                 render();
                 // Scroll to next visible (non-locked, non-answered) step
                 const nextStep = state.currentProblem.workflow.find(s =>
