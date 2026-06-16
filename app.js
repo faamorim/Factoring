@@ -460,9 +460,18 @@
     const step = state.currentProblem.workflow.find(s => s.id === stepId);
     if (!step || step.inputType === 'radio') return;
 
-    // Don't silently evaluate if already properly evaluated
-    const current = state.stepStatuses[stepId];
-    if (current === 'correct') return;
+    // Editing a step that was already confirmed correct invalidates that
+    // confirmation — reset it to unevaluated rather than leaving a stale
+    // green status on screen while the field now shows different content.
+    if (state.stepStatuses[stepId] === 'correct') {
+      state.stepStatuses[stepId] = 'empty';
+      if (step.inputType === 'pair') {
+        delete state.pairFieldStatuses[`${stepId}-a`];
+        delete state.pairFieldStatuses[`${stepId}-b`];
+      }
+      render();
+      return;
+    }
 
     let isCorrect = false;
     if (step.inputType === 'pair') {
