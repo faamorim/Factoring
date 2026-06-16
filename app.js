@@ -197,9 +197,15 @@
       if (step.gatedBy && !['correct', 'silent-correct'].includes(stepStatuses[step.gatedBy])) {
         stepStatuses[step.id] = 'locked';
 
-      // Radio steps — status managed on click
+      // Radio steps — status managed on click. 'locked' is excluded from the
+      // persisted value: it's not a real answer, just last evaluation's gate
+      // state, and once committed to state.stepStatuses it would otherwise
+      // stick forever — even after the gate opens — since 'locked' is truthy
+      // and ?? only falls back on null/undefined. That stuck 'locked' then
+      // cascades to every step gated on this one, permanently.
       } else if (step.inputType === 'radio') {
-        stepStatuses[step.id] = state.stepStatuses[step.id] ?? 'empty';
+        const persisted = state.stepStatuses[step.id];
+        stepStatuses[step.id] = (persisted && persisted !== 'locked') ? persisted : 'empty';
 
       // Pair steps
       } else if (step.inputType === 'pair') {
