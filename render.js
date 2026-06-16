@@ -1,5 +1,5 @@
 window.Renderer = (() => {
-  const { rawToPretty, rawToPrettyHtml } = window.Utils;
+  const { rawToPrettyHtml } = window.Utils;
   const { ensureInputRecord, keypadButtons, selectInput } = window.InputController;
 
   function renderFeedback(state, elements) {
@@ -257,11 +257,19 @@ window.Renderer = (() => {
     state.currentProblem.steps.slice(0, stepsToShow).forEach((step, index) => {
       const div = document.createElement('div');
       div.className = 'solution-step';
-      div.innerHTML = `
-        <strong>Step ${index + 1}: ${step.rule.replaceAll('_', ' ')}</strong>
-        <div>${rawToPretty(step.expression)} → ${rawToPretty(step.output)}</div>
-        <div style="margin-top:6px; color: var(--muted);">${rawToPretty(step.explanation)}</div>
-      `;
+
+      const heading = document.createElement('strong');
+      heading.textContent = `Step ${index + 1}: ${step.rule.replaceAll('_', ' ')}`;
+
+      const body = document.createElement('div');
+      body.innerHTML = `${rawToPrettyHtml(step.expression)} → ${rawToPrettyHtml(step.output)}`;
+
+      const explanation = document.createElement('div');
+      explanation.style.marginTop = '6px';
+      explanation.style.color = 'var(--muted)';
+      explanation.innerHTML = rawToPrettyHtml(step.explanation);
+
+      div.append(heading, body, explanation);
       container.appendChild(div);
     });
   }

@@ -105,10 +105,10 @@
     const p = params.get('p');
     if (!p) return false;
     const parts = p.split('.');
-    if (parts.length !== 4) return;
+    if (parts.length !== 4) return false;
     const [method, difficulty, mode, seedStr] = parts;
     const seed = parseInt(seedStr, 10);
-    if (isNaN(seed)) return;
+    if (isNaN(seed)) return false;
     // Apply settings to selects
     state.settings.method = method;
     state.settings.difficulty = difficulty;
@@ -194,7 +194,7 @@
 
     workflow.forEach((step) => {
       // Locked steps — gating step not yet correct
-      if (step.gatedBy && !['correct', 'silent-correct'].includes(stepStatuses[step.gatedBy] ?? state.stepStatuses[step.gatedBy])) {
+      if (step.gatedBy && !['correct', 'silent-correct'].includes(stepStatuses[step.gatedBy])) {
         stepStatuses[step.id] = 'locked';
 
       // Radio steps — status managed on click
