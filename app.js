@@ -287,7 +287,10 @@
 
     const target = result.firstNeedsAttention;
     if (!target) return;
-    const isWrong = result.firstWrong !== null;
+    // Only call it an "error" when the highlighted field is itself the wrong
+    // one — if it's merely empty/partial, an earlier field, not this one, is
+    // what's wrong, and saying so would mislead the student about a blank field.
+    const isWrong = target === result.firstWrong;
     selectInput(state, target.inputType === 'pair' ? `${target.id}-a` : target.id, render);
     setFeedback(isWrong ? 'One step needs attention — check the highlighted field.' : 'Looking good so far — keep going!', isWrong ? 'error' : 'info');
     setTimeout(() => pulseStep(target.id), 50);
