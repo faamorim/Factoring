@@ -77,9 +77,6 @@ window.Utils = (() => {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-    // Wrap x and y in math-variable spans — only when not adjacent to non-math letters.
-    // Excludes x/y inside words like "Multiply", "exponent", "every" etc.
-    // Allows xy compound variables and standalone x/y next to digits/operators.
     // Replace all regular spaces with thin spaces — ensures consistent math spacing
     // in the HTML layer without touching raw strings elsewhere in the codebase.
     const withSpacing = escaped.replace(/ /g, '&thinsp;');

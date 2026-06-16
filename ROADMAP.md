@@ -38,8 +38,6 @@ deliberately deferred and why.
     factor is a DoS — GT step exists but follow-up DoS steps are not
     generated. Needs new structure type and extended workflow builder.
 
-### Planned — in curriculum order
-
 ### Deferred
 - **Two-variable PST at Extending** — (ax + by)² is curriculum-standard
   and confirmed in math guides, but PST Extending already has higher
